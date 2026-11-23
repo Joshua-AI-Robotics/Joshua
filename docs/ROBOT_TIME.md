@@ -173,7 +173,7 @@ fabricated timestamp. Consumers call `RobotTime()` directly. Clock failures are
 reported as `RobotTimeError`, derived from `std::runtime_error`. Managed C++ nodes
 and the launcher use the shared `JOSHUA_MAIN`/`RunNode` boundary and
 `JoshuaInit(config)`; worker and destructor boundaries are described in the
-[ROS runtime documentation](../ros2/README.md#process-runtime-and-failure-handling).
+[ROS runtime documentation](../ros2/AGENTS.md#process-runtime-and-failure-handling).
 `TryRobotTime()` remains available as an optional
 `absl::StatusOr<double>` accessor with exception handling and finite-value checks.
 The actuator subscription boundary uses `TryRobotTime()` for headerless commands

@@ -16,6 +16,7 @@ EXPECTED_TOOLS = {
     "list_supported_components",
     "list_supported_hardware",
     "list_hardware_test_records",
+    "query_hardware_catalog",
     "validate_config",
     "list_devices",
     "describe_device",

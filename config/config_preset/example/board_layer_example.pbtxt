@@ -1,4 +1,4 @@
-# Example of the board-layer config shape (docs/BOARD_LAYER_RFC.md §6.4):
+# Example of the board-layer config shape (robot/board/AGENTS.md):
 # boards are shared, first-class objects; actuators bind to
 # (board_name, channel) instead of embedding comm. Parse-validated by
 # config_preset_validation_test; the runtime path lands with the board

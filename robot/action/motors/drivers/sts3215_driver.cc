@@ -125,7 +125,7 @@ absl::Status Sts3215Driver::SetPosition(float angle) {
   return channel_->SetTarget(robot::board::TargetMode::kPosition, angle);
 }
 
-// Torque semantics (docs/BOARD_LAYER_RFC.md §12.7, resolved for the board
+// Torque semantics (robot/board/AGENTS.md, defined for the board
 // layer in robot/board/interfaces/board_channel.h): STS3215 only has a
 // torque-*enable* register, so SetTorque gates Enable/Disable rather than
 // staging a TargetMode::kTorque value.

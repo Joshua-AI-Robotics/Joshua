@@ -9,8 +9,7 @@
 # The configured loop ends at 3.5 seconds; it does not wait for the final move.
 #
 # Single NEMA17 stepper on an ESP32 (TB6600 drive, or any STEP/DIR driver)
-# via JoshuaWire 0.2.0 / revision 4 over UART/USB-serial (docs/BOARD_LAYER_RFC.md §10
-# Phase 5) — same wire protocol and shared drive backend as
+# via JoshuaWire 0.2.0 / revision 4 over UART/USB-serial (see robot/board/AGENTS.md) — same wire protocol and shared drive backend as
 # firmware/teensy/41/, a different firmware image
 # (firmware/esp32/, joins the same JoshuaWire 0.2.0 / revision 4 family).
 #
@@ -61,7 +60,7 @@ robot {
         invert_dir: false
         enable_active_low: true
         # GPIO pins on the ESP32, matching whatever the board is physically
-        # wired to (docs/BOARD_LAYER_RFC.md §7.5 — pins are host-configured,
+        # wired to (robot/board/AGENTS.md — pins are host-configured,
         # not baked into the firmware image). 25/26/27 are ordinary
         # general-purpose output pins on a standard ESP32 DevKitC-style
         # board (not strapping pins, not input-only, not the default

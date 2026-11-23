@@ -1,0 +1,137 @@
+# LP-AM243 — TI EtherCAT simple demo (Hello World + EtherCAT slave)
+
+Follow the repository [instructions](../../../AGENTS.md) and applicable ancestor
+`AGENTS.md` files before changing or running this subsystem.
+
+Vendor TI firmware, not Joshua-owned (`robot/board/AGENTS.md` —
+vendor code stays as-is rather than migrating to the Joshua firmware
+pattern). Tracks AM243 setup, firmware experiments, and EtherCAT bring-up
+for Joshua. The former TI-demo host-side board/codec/tools are retired;
+these vendor firmware build/flash assets remain for historical bring-up.
+See also `firmware/am243/ti_ethercat_simple_demo_v1.md` (the firmware
+record: provenance, expected slave identity) and `docs/ethercat.md` (the
+detailed EtherCAT bring-up log, including SDK version pitfalls).
+
+## Layout
+
+```text
+firmware/am243/ti_ethercat_simple_demo_v1/
+  scripts/     build/flash/bring-up helper scripts (see Related files below)
+  setup/       SDK import configuration, requirements.txt, flash cfg templates
+  docs/
+    bringup.md   Hello World bring-up log
+    ethercat.md  EtherCAT bring-up log (SOEM master scan, SDK version notes)
+```
+
+## Status
+
+- [x] Board recognized, XDS110 debugger working, UART working
+- [x] MCU+ SDK build successful
+- [x] Hello World executed from CCS and flashed to OSPI; boots after
+      reset/power-on without CCS
+- [x] LP-AM243 EtherCAT simple slave demo built and flashed (Industrial
+      Communications SDK 09); host-side SOEM master reaches OPERATIONAL —
+      see `docs/ethercat.md`
+## Prerequisites
+
+Use the board identities, external SDK/toolchain versions, container mounts,
+and device preparation in [the AM243 board guide](../AGENTS.md). Hello World
+uses MCU+ SDK 12; the vendor EtherCAT demo uses Industrial SDK 09. Their SysConfig
+versions and applications are different and must not be interchanged.
+
+## Install
+
+```bash
+source scripts/activate.sh                                   # create/activate Python venv
+python3 -m pip install --upgrade -r setup/requirements.txt   # pyserial, pyelftools, construct, ...
+python3 setup/configure_sdk.py                                # patch imports.mak for local TI tool paths
+```
+
+For the EtherCAT demo specifically, also run:
+
+```bash
+python3 setup/configure_industrial_sdk_09.py
+scripts/check_industrial_sdk.sh
+```
+
+## Build
+
+```bash
+scripts/build.sh                       # Hello World
+scripts/build_ethercat_simple.sh       # LP-AM243 EtherCAT slave simple demo (Industrial Comms SDK 09)
+scripts/build_ethercat_beckhoff.sh     # LP-AM243 EtherCAT Beckhoff SSC demo (needs external Beckhoff SSC source)
+```
+
+## Flash
+
+Use the [board preparation](../AGENTS.md#preparation) to identify the XDS110
+UART and enter UART boot mode. From this legacy implementation directory,
+these commands select the vendor applications, not JoshuaWire images:
+
+```bash
+scripts/flash.sh /dev/ttyACM0                    # Hello World
+scripts/flash_ethercat_simple.sh /dev/ttyACM0     # EtherCAT slave simple demo
+```
+
+After a successful flash, follow the [normal-boot procedure](../AGENTS.md#return-to-normal-boot).
+
+## Verify
+
+Hello World — verified boot output over UART:
+
+```text
+KPI_DATA: [BOOTLOADER_PROFILE] Boot Media       : NOR SPI FLASH
+Image loading done, switching to application ...
+Hello World!
+```
+
+EtherCAT slave demo — verify the board enumerates as an EtherCAT slave and
+reaches OPERATIONAL from the host side; see `docs/ethercat.md` for the
+full SOEM master scan trace and expected slave identity
+(`firmware/am243/ti_ethercat_simple_demo_v1.md` has the expected identity
+fields). The old Joshua TI-demo host smoke target is retired. Current Joshua
+EtherCAT runtime requires the separate
+[JW profile](../joshua_dual_transport/AGENTS.md#opt-in-jw-ethercat-profile),
+not this vendor image.
+
+## Wiring / Pinout
+
+Not applicable — AM243 communicates over EtherCAT (a NIC-to-NIC Ethernet
+link, not a channel-table pinout contract), and this firmware does not expose
+JoshuaWire commands. Use the separate Joshua firmware for serial or JW EtherCAT.
+
+## Known gaps / Troubleshooting
+
+- The SDK-shipped EtherCAT demo runs on an evaluation stack with a
+  runtime limit — if UART prints `EVAL VERSION EXPIRED`, the slave stops
+  responding; power-cycle to reset the timer, or rebuild with the
+  licensed Beckhoff SSC flow for unlimited runtime.
+- SysConfig version is NOT interchangeable between the plain MCU+ SDK 12
+  flow (`1.26.3`) and the Industrial Comms SDK 09 flow (`1.17.0`) — using
+  the wrong one breaks the build against that SDK's metadata.
+- Full troubleshooting/version-pitfall list is in `docs/bringup.md` and
+  `docs/ethercat.md`.
+
+## Related files
+
+- [JoshuaWire profile](../joshua_dual_transport/AGENTS.md) — current Joshua host integration
+- `firmware/am243/ti_ethercat_simple_demo_v1.md` — firmware record
+  (provenance, expected slave identity)
+- `scripts/activate.sh` — create and activate the Python venv
+- `scripts/build.sh` / `scripts/build_ethercat_simple.sh` /
+  `scripts/build_ethercat_beckhoff.sh` — build Hello World / EtherCAT
+  simple demo / EtherCAT Beckhoff SSC demo
+- `scripts/flash.sh` / `scripts/flash_ethercat_simple.sh` — flash the
+  corresponding image to OSPI over UART
+- `scripts/ccs.sh` — launch CCS Theia from the expected install location
+- `scripts/check_industrial_sdk.sh` — detect TI Industrial Communications
+  SDK and EtherCAT example paths
+- `scripts/find_industrial_sdk_artifact.sh` — locate downloaded or
+  extracted Industrial Communications SDK artifacts
+- `setup/configure_sdk.py` / `setup/configure_industrial_sdk_09.py` —
+  configure SDK imports for local TI tool paths
+
+## Notes
+
+The goal of this repo is to treat AM243 as one hardware backend among
+many, not as a special-case architecture.
