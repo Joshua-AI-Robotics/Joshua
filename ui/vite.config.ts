@@ -23,6 +23,7 @@ export default defineConfig({
       clientPort: 3000,
     },
     proxy: {
+      '/api/chat/': { target: 'http://joshua-chat:8080' },
       // Proxy /api/zenoh requests to Zenoh bridge REST API
       // Use host.docker.internal when running in Docker to access host network services
       '/api/zenoh': {

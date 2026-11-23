@@ -1,0 +1,16 @@
+services:
+  joshua-ui:
+    ports: !override
+      - "127.0.0.1:3000:80"
+    depends_on:
+      - joshua-chat
+
+  joshua-chat:
+    build:
+      context: .
+      dockerfile: ui/chat/Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ZENOH_BRIDGE_URL: ${ZENOH_BRIDGE_URL-http://host.docker.internal:8000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

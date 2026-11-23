@@ -8,6 +8,7 @@ interface LayoutProps {
 
 const navigation = [
   { name: 'Monitor', href: '/monitor', icon: '📊' },
+  { name: 'Chat', href: '/chat', icon: '💬' },
   { name: 'Config', href: '/config', icon: '⚙️' },
 ]
 
