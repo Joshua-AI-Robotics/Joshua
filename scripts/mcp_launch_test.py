@@ -79,7 +79,11 @@ class RuntimeTest(unittest.TestCase):
                 code = 1
             else:
                 stage = Path(kwargs["env"]["JOSHUA_MCP_ARTIFACTS"])
-                for name in (*runtime.BINARIES, runtime.DECISIONS_BINARY):
+                for name in (
+                    *runtime.BINARIES,
+                    runtime.DECISIONS_BINARY,
+                    runtime.DEMO_BINARY,
+                ):
                     target = stage / name
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_text("#!/bin/sh\nexit 0\n")
@@ -440,6 +444,26 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(
             env["JOSHUA_MCP_CONFIG_ROOT"], str(self.root / "config/config_preset")
         )
+
+    def test_demo_forwards_exit_code_and_records_prepared_revision(self):
+        state = self.prepare()
+        with mock.patch.object(runtime, "require_host"), mock.patch.object(
+            runtime, "source_manifest", return_value=state["source"]
+        ), mock.patch.object(runtime.subprocess, "Popen") as launch:
+            with self.assertRaisesRegex(runtime.McpError, "OPENAI_API_KEY"):
+                self.runtime.serve("demo-decisions")
+            launch.assert_not_called()
+            self.runtime.environ["OPENAI_API_KEY"] = "demo-test-value"
+            launch.return_value.wait.return_value = 1
+            self.assertEqual(self.runtime.serve("demo-decisions"), 1)
+        command = launch.call_args.args[0]
+        self.assertEqual(
+            command[-2:], ["mcp-decisions", "/opt/joshua-mcp/" + runtime.DEMO_BINARY]
+        )
+        self.assertNotIn("demo-test-value", command)
+        report = Path(launch.call_args.kwargs["stdout"].name)
+        self.assertEqual(report.parent, self.root / "output/decisions-live")
+        self.assertEqual(json.loads(report.read_text())["source"], state["source"])
 
     def test_runtime_uses_prepared_compose_even_if_source_definition_changes(self):
         state = self.prepare()

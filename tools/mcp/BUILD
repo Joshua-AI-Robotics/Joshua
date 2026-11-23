@@ -118,6 +118,18 @@ py_binary(
     ] + model_requirement("decisions", "openai") + mcp_requirement("mcp"),
 )
 
+py_binary(
+    name = "decisions_replay_demo",
+    srcs = ["decisions_replay_demo.py"],
+    deps = mcp_requirement("mcp"),
+)
+
+py_test(
+    name = "decisions_replay_demo_test",
+    srcs = ["decisions_replay_demo_test.py"],
+    deps = [":decisions_replay_demo"] + mcp_requirement("mcp"),
+)
+
 py_test(
     name = "decisions_request_test",
     srcs = ["decisions_request_test.py"],

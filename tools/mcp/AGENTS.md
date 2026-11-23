@@ -436,3 +436,28 @@ routing, binding, visual-answer and motor timing/usage when each call occurs.
 During a pending turn call `stop_decision(sequence)` to invalidate it locally.
 The sink rechecks the turn, config and deadline at admission. A receipt reports
 a recorded target and the replay image remains fixed across requests.
+
+To demonstrate a camera-head session from the repository root, export
+`OPENAI_API_KEY` and run:
+
+```bash
+./scripts/joshua_mcp.sh prepare
+./scripts/joshua_mcp.sh demo-decisions
+```
+
+The demo opens one MCP connection to the prepared replay server and makes live
+OpenAI calls. It sends three requests in order:
+
+| Request | Expected route | Expected replay result |
+| --- | --- | --- |
+| Look at the red mug. | `head` | One pan target at +0.100 rad. |
+| Tell me where the red mug is, don't move. | `scene` | Visual reply, no recorded command. The mug is on the right. |
+| Look at the green bottle. | `head` | No recorded command. The motor choice can report a missing target or abstain on low confidence. |
+
+The terminal shows each route, outcome, reply and recorded target. The demo
+checks the route, outcome and command automatically. Read the visual reply to
+check the reported location. Each run saves its requests and complete tool
+reports as JSON Lines under `output/decisions-live/`. A mismatch returns a
+nonzero exit code and stays in the transcript. A disconnected session leaves
+the last attempted request in the file. Run the offline grading tests with
+`bazel test //tools/mcp:decisions_replay_demo_test` in a Docker dev shell.

@@ -12,6 +12,7 @@ BINARIES = (
     "tools/mcp/config_validation_server",
     "tools/mcp/setup_smoke",
     "tools/mcp/decisions_server",
+    "tools/mcp/decisions_replay_demo",
     "config/joshua_validate_config",
     "config/joshua_inspect_config",
 )
