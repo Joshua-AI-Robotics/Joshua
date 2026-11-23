@@ -104,6 +104,23 @@ services:
       - /opt/joshua-mcp/config/joshua_inspect_config
       - --config-root
       - /configs
+  mcp-decisions:
+    <<: *runtime
+    network_mode: bridge
+    working_dir: /tmp
+    environment:
+      OPENAI_API_KEY:
+      ENABLE_MOCK_SERIAL_PORTS: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HOME: /tmp
+    volumes:
+      - type: bind
+        source: ${JOSHUA_MCP_ARTIFACTS:-./dist/mcp/unprepared}
+        target: /opt/joshua-mcp
+        read_only: true
+        bind:
+          create_host_path: false
+    command: [/opt/joshua-mcp/tools/mcp/decisions_server]
   mcp-check:
     <<: *runtime
     stdin_open: false

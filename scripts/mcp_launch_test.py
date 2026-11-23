@@ -79,7 +79,7 @@ class RuntimeTest(unittest.TestCase):
                 code = 1
             else:
                 stage = Path(kwargs["env"]["JOSHUA_MCP_ARTIFACTS"])
-                for name in runtime.BINARIES:
+                for name in (*runtime.BINARIES, runtime.DECISIONS_BINARY):
                     target = stage / name
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_text("#!/bin/sh\nexit 0\n")
@@ -736,6 +736,17 @@ class ComposeContractTest(unittest.TestCase):
                 text=True,
             )
         )
+        decisions = model["services"]["mcp-decisions"]
+        self.assertEqual(decisions["network_mode"], "bridge")
+        self.assertTrue(decisions["read_only"])
+        self.assertFalse(decisions.get("devices"))
+        self.assertFalse(decisions.get("privileged"))
+        self.assertEqual(
+            [v["target"] for v in decisions["volumes"]], ["/opt/joshua-mcp"]
+        )
+        inspection = model["services"]["mcp-serve"]
+        self.assertEqual(inspection["network_mode"], "none")
+        self.assertNotIn("OPENAI_API_KEY", inspection["environment"])
         prepare = model["services"]["mcp-prepare"]
         self.assertEqual(prepare["user"], f"{os.getuid()}:{os.getgid()}")
         self.assertEqual(prepare["cap_drop"], ["ALL"])

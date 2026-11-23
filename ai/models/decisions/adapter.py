@@ -5,7 +5,6 @@ import base64
 import copy
 import io
 import json
-import math
 from contextlib import asynccontextmanager
 from functools import partial
 
@@ -30,6 +29,7 @@ from ai.inference.motor_policy import (
 from ai.inference.policy_session import Evaluation, PolicySession
 from ai.inference.proto.motor_policy_pb2 import MotorPolicy
 from ai.inference.types import AdapterSpec
+from ai.models.decisions.choice import decode_choice
 
 
 def _request_body(settings, request):
@@ -92,45 +92,6 @@ def _request_body(settings, request):
     }
 
 
-def _probability(value):
-    return type(value) in (int, float) and 0 <= value <= 1
-
-
-def _decode(question, answer, threshold):
-    if not isinstance(answer, dict) or answer.get("name") != question.id:
-        return NoCommand.MISMATCHED_ANSWER
-    if answer.get("type") == "refusal":
-        return NoCommand.REFUSED
-    label = answer.get("choice")
-    labels = {choice.label for choice in question.choices}
-    if (
-        answer.get("type") != "choice"
-        or not isinstance(label, str)
-        or label not in labels
-    ):
-        return NoCommand.MALFORMED_RESPONSE
-    probabilities = answer.get("probabilities")
-    if not isinstance(probabilities, list) or len(probabilities) != len(labels):
-        return NoCommand.MALFORMED_RESPONSE
-    total = 0.0
-    for entry in probabilities:
-        if (
-            not isinstance(entry, dict)
-            or not isinstance(entry.get("value"), str)
-            or entry["value"] not in labels
-        ):
-            return NoCommand.MALFORMED_RESPONSE
-        probability = entry.get("probability")
-        if not _probability(probability):
-            return NoCommand.MALFORMED_RESPONSE
-        total += probability
-        labels.remove(entry["value"])
-    confidence = answer.get("confidence")
-    if not _probability(confidence) or not math.isclose(total, 1.0, abs_tol=1e-5):
-        return NoCommand.MALFORMED_RESPONSE
-    return NoCommand.LOW_CONFIDENCE if confidence < threshold else label
-
-
 async def _evaluate(settings, api, request):
     details = {"model": settings.model}
 
@@ -177,7 +138,15 @@ async def _evaluate(settings, api, request):
             if type(usage.get(k)) is int
         }
     answer = answers[0]
-    choice = _decode(question, answer, settings.min_confidence)
+    try:
+        choice = decode_choice(
+            question.id,
+            (c.label for c in question.choices),
+            answer,
+            settings.min_confidence,
+        )
+    except ValueError as exc:
+        choice = NoCommand(str(exc))
     if not isinstance(choice, NoCommand) or choice is NoCommand.LOW_CONFIDENCE:
         details.update(choice=answer["choice"], confidence=answer["confidence"])
     if isinstance(choice, NoCommand):

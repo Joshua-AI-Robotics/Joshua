@@ -30,6 +30,7 @@ BINARIES = (
     "config/joshua_validate_config",
     "config/joshua_inspect_config",
 )
+DECISIONS_BINARY = "tools/mcp/decisions_server"
 ROOT_LABEL = "io.joshua.mcp.root"
 
 
@@ -625,7 +626,7 @@ class Runtime:
                     timeout=None,
                 )
                 self.daemon_info(pin)
-                for name in BINARIES:
+                for name in (*BINARIES, DECISIONS_BINARY):
                     if not (staging / name).is_file():
                         raise McpError(
                             f"Missing prepared artifact: {name}", "artifacts_invalid"
@@ -869,7 +870,7 @@ class Runtime:
                 "MCP protocol check did not produce a passing report", "smoke_failed"
             ) from error
 
-    def serve(self):
+    def serve(self, decisions=False, observation_dir=None):
         require_host()
         state = self.checked_state()
         if state["source"] != source_manifest(self.root):
@@ -878,7 +879,26 @@ class Runtime:
                 "Run prepare to update.",
                 file=sys.stderr,
             )
-        command, env = self.compose_command(state, "mcp-serve")
+        service = "mcp-decisions" if decisions else "mcp-serve"
+        command, env = self.compose_command(state, service)
+        if decisions:
+            if not (self.state_dir / state["generation"] / DECISIONS_BINARY).is_file():
+                raise McpError("Run prepare to build the Decisions tool.")
+            if not self.environ.get("OPENAI_API_KEY"):
+                raise McpError("Set OPENAI_API_KEY for the Decisions MCP server.")
+            if observation_dir is not None:
+                directory = observation_dir.resolve(strict=True)
+                if not directory.is_dir() or ":" in str(directory):
+                    raise McpError("Invalid runtime observation directory.")
+                at = command.index(service)
+                command[at:at] = ["--volume", f"{directory}:/observations:ro"]
+                command.extend(
+                    [
+                        "/opt/joshua-mcp/" + DECISIONS_BINARY,
+                        "--observation-dir",
+                        "/observations",
+                    ]
+                )
         name = command[command.index("--name") + 1]
         child = None
         previous = {}
@@ -929,7 +949,9 @@ def main(argv=None):
             ) from error
         return setup_main(argv[1:])
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "serve", "doctor", "check"))
+    parser.add_argument(
+        "command", choices=("prepare", "serve", "serve-decisions", "doctor", "check")
+    )
     parser.add_argument("--stack", choices=STACKS, default="u22")
     parser.add_argument(
         "--root", type=Path, default=Path(__file__).resolve().parents[1]
@@ -941,10 +963,15 @@ def main(argv=None):
         action="store_true",
         help="Explicitly rebuild the stack image during prepare",
     )
+    parser.add_argument(
+        "--observation-dir", type=Path, help="Runtime snapshots for serve-decisions"
+    )
     args = parser.parse_args(argv)
+    if args.observation_dir and args.command != "serve-decisions":
+        parser.error("--observation-dir applies to serve-decisions")
     runtime = Runtime(args.root, args.stack, args.config_root)
-    if args.command == "serve":
-        return runtime.serve()
+    if args.command in ("serve", "serve-decisions"):
+        return runtime.serve(args.command == "serve-decisions", args.observation_dir)
     if args.command == "prepare":
         result = runtime.prepare(rebuild_image=args.rebuild_image)
     elif args.command == "check":

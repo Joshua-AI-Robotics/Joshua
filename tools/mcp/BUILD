@@ -1,4 +1,5 @@
 load(":requirements.bzl", "mcp_requirement")
+load("//ai/models:requirements.bzl", "model_requirement")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 exports_files([
@@ -98,4 +99,28 @@ py_test(
     ],
     main = "setup_smoke.py",
     deps = mcp_requirement("mcp"),
+)
+
+py_library(
+    name = "decisions_request",
+    srcs = ["decisions_request.py"],
+    deps = ["//ai/models/decisions:choice"] + model_requirement("decisions", "openai"),
+)
+
+py_binary(
+    name = "decisions_server",
+    srcs = ["decisions_server.py"],
+    deps = [
+        ":config_validation_lib",
+        ":decisions_request",
+    ] + model_requirement("decisions", "openai") + mcp_requirement("mcp"),
+)
+
+py_test(
+    name = "decisions_request_test",
+    srcs = ["decisions_request_test.py"],
+    deps = [
+        ":decisions_request",
+        ":decisions_server",
+    ] + mcp_requirement("mcp") + model_requirement("decisions", "httpx2") + model_requirement("decisions", "openai"),
 )
