@@ -14,9 +14,10 @@ the reusable interface and hardware-free replay can be developed independently.
 R2S2R training/transfer and broader policy/simulator integration follow later.
 
 Scope update, 2026-11-22. Add typed operator requests to the first application.
-The control panel routes each turn to an answer, a read-only capability or a
-supported head task. The motor-policy milestones remain independently testable.
-See [typed requests in the control panel](#typed-requests-in-the-control-panel).
+The operator types in an MCP client. Joshua exposes a request tool through MCP.
+The Decisions API selects the route for the whole request. Joshua validates that
+choice, runs the available handler and returns the result through the same tool. The motor-policy milestones remain independently testable.
+See [typed requests through MCP](#typed-requests-through-mcp).
 
 ## 1. Outcome and scope
 
@@ -90,13 +91,14 @@ joint, measured-state samples where required by its mapping, and a test command
 sink. It must exercise the same command contract without hard-coded head questions
 or joint names. Hardware-free fixtures retain motor semantics through the test sink.
 
-### Typed requests in the control panel
+### Typed requests through MCP
 
-An operator can type a new request on every turn. For example, “What is a servo?”,
-“Which nodes are online?” and “Look at the red mug” use the same text box.
-Joshua decides whether to answer, read robot state, start a supported action,
-ask for clarification or explain a limitation. A user can ask about a capability
-even when the connected robot cannot execute it.
+For each Joshua turn, the MCP client sends the operator’s original request to
+the Joshua request tool and displays its result. Decisions chooses among the
+offered routes. Joshua owns validation and execution. The client can submit
+“What is a servo?”, “What is running?” or “Look at the red mug” through the same
+tool. An opt-in networked backend holds the API key. The existing offline
+inspection workflow continues to work independently. [MCP setup](MCP_SETUP.md)
 
 **What the OpenAI examples establish.** The Decisions request carries user input
 separately from the application's questions. Its complaint-routing example uses
@@ -120,18 +122,18 @@ and [text generation guide](https://developers.openai.com/api/docs/guides/text).
 | Example turn | Joshua's proposed behavior |
 | --- | --- |
 | “What is a servo?” | Send the question to a text-only Responses call and display the answer. No robot connection is required. |
-| “Which nodes are online?” | Run a read-only capability against the current ROS graph. Return observed names and observation time, or report that the graph is unavailable. |
+| “What is running?” | Read Joshua’s existing runtime status observation. Preserve source, age, and availability. Explain when an observation is missing or stale. |
 | “What can you see?” | If an authorized, fresh camera frame is available, provide it to the answer model as read-only evidence. Otherwise explain why the scene cannot be described. Issue zero motor commands for this request. |
 | “Look at the red mug.” | If target tracking is available, pass “red mug” as target evidence to the configured camera-head policy. It evaluates the image and measured pan position. Only an admitted bounded command can move the head. An absent target produces the configured no-motion behavior. |
 | “Could the head track a mug?” / “Look at it.” | Answer the capability question. For the second request, ask which target if the current conversation does not identify one unambiguously. |
 | “Pick up the mug.” | On a head-only preset, explain that grasping is unavailable. Do not substitute a head movement. |
 
-1. **Collect the turn.** Add a text entry and transcript to the React control
-   panel. A Joshua-side request handler owns the conversation, turn ID and a
-   bounded history. The browser submits text and displays replies and execution
-   status. API credentials stay on the server. The existing monitor reads graph
-   information through Zenoh and ROS 2. Reuse that data source for the first
-   read-only capability. [Monitor implementation](../ui/src/pages/MonitorPage.tsx)
+1. **Collect the turn.** Accept bounded operator text through a stdio MCP tool.
+   The client owns the transcript. The request handler owns turn identity,
+   replay protection and bounded history. Return a structured route, outcome
+   and reply. Use the existing runtime observation reader for status.
+   Keep API credentials in the operator-enabled backend. Tool arguments cannot
+   set credentials, API endpoints or hardware destinations.
 2. **Choose a route.** Build a single Decisions choice question from the
    validated preset and the handlers actually available to this operator in
    this session. Include answer, clarify and unsupported outcomes. Supply the
@@ -173,9 +175,9 @@ and [text generation guide](https://developers.openai.com/api/docs/guides/text).
 
 | Increment | Dependency and deliverable | Evidence required |
 | --- | --- | --- |
-| Chat 1 — Route and answer | Can start with deterministic providers while P2 is developed. Deliver the text box, server handler, Responses answer path, read-only node lookup and clarification. Expose visual Q&A only with a bound camera reader. | From the UI, replay general questions, status requests, paraphrases, ambiguous follow-ups and unsupported actions. Verify the exact selected handler, reply and invocation count. Exercise disconnection, refusal and timeout. All these cases produce zero motor commands. |
-| Chat 2 — Connect a head task in replay | Chat 1 plus P1/P2. Add the head capability with a test command sink. Pin model/SDK, question, choices and acceptance threshold against a labeled set of operator turns before live evaluation. | Pair “Can you look left?” in an ambiguous context with explicit requests and negations such as “Tell me where the mug is, don't move.” Cover two targets, target loss, duplicate submits, stop during an API call and a late result after config change. Require zero unintended dispatches on the fixed test set. Record route errors, clarifications, latency and usage separately for routing, answering and motor decisions. |
-| Chat 3 — Qualify end to end | Chat 2 plus P3. Connect the same head handler to the production ROS path. Run hardware-free D1 on Humble and Jazzy. Run D2 only with the qualified configuration-A head, API access and operator authorization. | Enter a new target in chat, observe measured movement, ask a read-only question, cancel and demonstrate local stop during delayed completion. Preserve rejected and failed attempts. Record hardware-free replay, live API behavior and physical results as separate evidence. |
+| MCP 1 — Route and answer | Deliver one stdio request tool, the Decisions router, Responses answer path, read-only runtime status and clarification. Stack on P2 (#176). The browser prototype (#177) is outside this dependency chain. | From an MCP client, replay general questions, status requests, paraphrases, ambiguous follow-ups and unsupported actions. Verify the exact selected handler, reply and invocation count. Exercise disconnection, refusal and timeout. All these cases produce zero motor commands. |
+| MCP 2 — Connect a head task in replay | MCP 1 plus P1/P2. Add the head capability with a test command sink. Pin model/SDK, question, choices and acceptance threshold against a labeled set of operator turns before live evaluation. | Pair “Can you look left?” in an ambiguous context with explicit requests and negations such as “Tell me where the mug is, don't move.” Cover two targets, target loss, duplicate submits, stop during an API call and a late result after config change. Require zero unintended dispatches on the fixed test set. Record route errors, clarifications, latency and usage separately for routing, answering and motor decisions. |
+| MCP 3 — Qualify end to end | MCP 2 plus P3. Connect the same head handler to the production ROS path. Run hardware-free D1 on Humble and Jazzy. Run D2 only with the qualified configuration-A head, API access and operator authorization. | Enter a new target through the MCP client, observe measured movement, ask a read-only question, cancel and demonstrate local stop during delayed completion. Preserve rejected and failed attempts. Record hardware-free replay, live API behavior and physical results as separate evidence. |
 
 The first implementation can keep the read-only lookup and head handler in a
 small dispatch table. A future capability adds one preset-bound handler, typed
@@ -628,8 +630,8 @@ decision-provider fixture and captured API
 responses to develop without network access, credentials, GPU, or hardware.
 Live API checks and physical qualification are separate evidence.
 
-For the operator-facing application, follow [Chat 1–3](#delivery-and-acceptance-for-typed-requests)
-alongside P1–P3. Chat 1 and replay can proceed while #145 is in review.
+For the operator-facing application, follow [MCP 1–3](#delivery-and-acceptance-for-typed-requests)
+alongside P1–P3. MCP 1 and replay can proceed while #145 is in review.
 As checked on 2026-11-22, #149, #143 and #133 have merged. Reconcile the
 production ROS bindings with #145 when it lands.
 
@@ -765,8 +767,8 @@ The subsequent camera-head demo delivery is complete
 when P3 and its D1/D2 evidence pass. Neither delivery requires the broader
 stabilization target below.
 
-The typed-chat goal is complete when Chat 1–3 demonstrate open-ended answers,
-a real read-only capability and qualified head motion from the same text box.
+The typed-chat goal is complete when MCP 1–3 demonstrate open-ended answers,
+a real read-only capability and qualified head motion through the same MCP client.
 
 The abstraction is ready to stabilize when a locomotion-style controller and
 an image/task policy use it without model-specific branches in the shared host,
