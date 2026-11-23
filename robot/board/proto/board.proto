@@ -10,7 +10,7 @@ package robot.board;
 // Values name the native controller only — comm peripherals (e.g. an
 // EasyCAT shield) belong to Board.comm and drive peripherals (e.g. a
 // TB6600 stepper drive) to Channel.drive, never to the board type.
-// See docs/BOARD_LAYER_RFC.md §5.6 and §6.1.
+// See robot/board/AGENTS.md.
 enum BoardType {
   BOARD_INVALID = 0;
   AM243 = 1;
@@ -21,10 +21,10 @@ enum BoardType {
   HOST_GPIO = 5;    // No external controller; host pins drive the motor.
   MOCK = 6;         // Tests; channels are in-memory fakes.
   ESP32 = 7;        // MCU running Joshua firmware, same joshua_wire
-                    // family as TEENSY41 (docs/BOARD_LAYER_RFC.md §7.3).
+                    // family as TEENSY41 (robot/board/AGENTS.md).
 }
 
-// The drive leg: how the board moves the motor (docs/BOARD_LAYER_RFC.md §5.5).
+// The drive leg: how the board moves the motor (robot/board/AGENTS.md).
 enum DriveInterface {
   DRIVE_INVALID = 0;
   STEP_DIR = 1;  // Pulse/direction stepper drive (TB6600, ...).
@@ -39,7 +39,7 @@ message StepDirConfig {
   bool invert_dir = 2;
   bool enable_active_low = 3;
   // GPIO pin mapping, pushed to firmware at Init() via CONFIGURE_CHANNEL —
-  // not baked into the firmware image (docs/BOARD_LAYER_RFC.md §7.5,
+  // not baked into the firmware image (robot/board/AGENTS.md,
   // revised: host-configured pins bring MCU-firmware boards in line with
   // every other board type, all of which already put their hardware-
   // addressing fact in config — AM243's PDO offsets, FeetechBusBoard's
@@ -67,7 +67,7 @@ message ServoBusConfig {
   uint32 servo_id = 1;
   // Feetech "Moving Time" register value (ms), pushed once as a
   // CONFIGURE_CHANNEL tunable at board Init and bundled into every goal
-  // position write thereafter (docs/BOARD_LAYER_RFC.md §10 Phase 4).
+  // position write thereafter (robot/board/AGENTS.md).
   uint32 move_time_ms = 2;
 }
 
@@ -84,7 +84,7 @@ message HostGpioConfig {
 // One motor slot on one board. Both wiring facts (e.g. StepDirConfig's
 // pins) and tunables are pushed at Init() via CONFIGURE_CHANNEL — see
 // StepDirConfig for why pins moved out of the firmware image
-// (docs/BOARD_LAYER_RFC.md §7.5).
+// (robot/board/AGENTS.md).
 message Channel {
   uint32 index = 1;
   DriveInterface drive = 2;

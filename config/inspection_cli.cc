@@ -94,7 +94,7 @@ Value Catalog() {
       "support_evidence",
       Text("Fixed subsystem-owned factory descriptor and creator tables in this build; creators "
            "were not called."));
-  Set(data, "integration_guide", Text("docs/AI_INTEGRATION.md"));
+  Set(data, "integration_guide", Text("tools/mcp/AGENTS.md"));
   return data;
 }
 Value Devices(const config::Config& cfg) {

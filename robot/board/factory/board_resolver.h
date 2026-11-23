@@ -22,7 +22,7 @@ absl::StatusOr<const robot::board::Board*> ResolveBoardConfig(
 
 // Resolves (board_name, channel) against boards{}, the single implementation
 // of the lookup both ActionFactory and PerceptionFactory need
-// (docs/BOARD_LAYER_RFC.md §6.5). `owner` names the thing doing the
+// (robot/board/AGENTS.md). `owner` names the thing doing the
 // referencing — "Actuator 'servo_1'", "Sensor 'joint_1'" — and appears in
 // every error, so a config mistake says which entry is wrong.
 //

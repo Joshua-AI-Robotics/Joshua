@@ -8,18 +8,14 @@ from pathlib import Path
 
 from tools.mcp.hardware_catalog import (
     CATALOG_GUIDE_PATH,
-    CATALOG_PATH,
     DATA_KEYS,
     MODEL_OPERATION,
-    RECORDS_PATH,
     TEST_GUIDE_PATH,
     TEST_OPERATION,
     HardwareCatalog,
     hardware_error,
     load_hardware,
     load_test_records,
-    render_catalog_markdown,
-    render_test_markdown,
     validate_hardware,
     validate_hardware_report,
     validate_references,
@@ -55,12 +51,8 @@ class CatalogIntegrityTest(unittest.TestCase):
         self.assertTrue(hardware)
         self.assertTrue(records)
         validate_references(hardware, records)
-        self.assertEqual(
-            CATALOG_GUIDE_PATH.read_text(), render_catalog_markdown(hardware)
-        )
-        self.assertEqual(
-            TEST_GUIDE_PATH.read_text(), render_test_markdown(hardware, records)
-        )
+        self.assertIn("hardware_catalog/", CATALOG_GUIDE_PATH.read_text())
+        self.assertIn("hardware_catalog/", TEST_GUIDE_PATH.read_text())
         self.assertNotIn("measured_fps", hardware[0])
         self.assertNotIn("verification", hardware[0])
         self.assertNotIn("model", records[0])
@@ -249,7 +241,9 @@ class HardwareDiscoveryTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(report["status_code"], "OK")
             report = await backend.list_hardware_test_records()
             self.assertEqual(report["status_code"], "DATA_LOSS")
-            tests.write_bytes(RECORDS_PATH.read_bytes())
+            tests.write_text(
+                json.dumps(dict(schema_version=1, records=load_test_records()))
+            )
             self.assertEqual(
                 (await backend.list_hardware_test_records())["status_code"], "OK"
             )
@@ -259,8 +253,8 @@ class HardwareDiscoveryTest(unittest.IsolatedAsyncioTestCase):
             catalog, tests = write_metadata(directory)
             backend = HardwareCatalog(catalog, tests)
             for path, operation, original in (
-                (catalog, MODEL_OPERATION, CATALOG_PATH),
-                (tests, TEST_OPERATION, RECORDS_PATH),
+                (catalog, MODEL_OPERATION, None),
+                (tests, TEST_OPERATION, None),
             ):
                 path.unlink()
                 for raw, code in (
@@ -273,7 +267,16 @@ class HardwareDiscoveryTest(unittest.IsolatedAsyncioTestCase):
                     report = await getattr(backend, operation)()
                     validate_hardware_report(report, operation)
                     self.assertEqual(report["status_code"], code)
-                path.write_bytes(original.read_bytes())
+                entries = (
+                    load_hardware()
+                    if operation == MODEL_OPERATION
+                    else load_test_records()
+                )
+                path.write_text(
+                    json.dumps(
+                        dict(schema_version=1, **{DATA_KEYS[operation]: entries})
+                    )
+                )
             records = load_test_records()
             records[0]["hardware_id"] = "orphan-model"
             tests.write_text(json.dumps(dict(schema_version=1, records=records)))

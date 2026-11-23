@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "id": "arduino-uno",
+  "kind": "board",
+  "manufacturer": "Arduino",
+  "model": "UNO",
+  "aliases": [],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [
+    "declared-schema-entry"
+  ],
+  "specifications": [],
+  "integration": {
+    "status": "unsupported",
+    "driver": null,
+    "implementations": [],
+    "presets": [],
+    "guide": "firmware/arduino/AGENTS.md",
+    "support_scope": "Declared in the schema but rejected by the host factory; no firmware image or upload target exists."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "mcu": null,
+    "transports": [],
+    "firmware_guides": [
+      "firmware/arduino/AGENTS.md"
+    ]
+  },
+  "limitations": [
+    "Physical results apply only to the listed unit, firmware, setup and workload; untested capabilities are not qualified.",
+    "Hardware revision and responsible maintainer are not recorded in the imported evidence."
+  ],
+  "validation_history": [],
+  "support_history": []
+}

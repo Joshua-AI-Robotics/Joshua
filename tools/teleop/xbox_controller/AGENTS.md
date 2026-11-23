@@ -1,7 +1,7 @@
 # Xbox controller tool
 
 Follow the repository [instructions](../../../AGENTS.md) and
-[tools contract](../../README.md). This standalone operator-input tool is
+[tools contract](../../AGENTS.md). This standalone operator-input tool is
 independent of Joshua's configured robot drivers and launcher graph.
 
 ## Architecture contract

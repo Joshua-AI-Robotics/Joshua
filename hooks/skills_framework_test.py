@@ -29,7 +29,7 @@ class SkillsFrameworkTest(unittest.TestCase):
         self.skill = self.library / "joshua-test"
         self.skill.mkdir()
         self.metadata("name: joshua-test\ndescription: Use when testing")
-        (self.library / "README.md").write_text("[Test](joshua-test/SKILL.md)\n")
+        (self.library / "AGENTS.md").write_text("[Test](joshua-test/SKILL.md)\n")
         self.home = self.root / "home"
         self.home.mkdir()
         self.env = dict(
@@ -115,7 +115,7 @@ class SkillsFrameworkTest(unittest.TestCase):
         self.assertTrue(all(link.is_symlink() for link in links))
         self.install()
         self.assertTrue(all(not link.is_symlink() for link in links))
-        (self.library / "README.md").write_text("# Empty library\n")
+        (self.library / "AGENTS.md").write_text("# Empty library\n")
         self.assertEqual(self.guard().returncode, 0)
 
     def test_preserve_local_data_and_foreign_links_unless_forced(self):

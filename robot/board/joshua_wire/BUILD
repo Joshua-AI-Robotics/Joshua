@@ -1,4 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("//:system_ros2_rules.bzl", "ros2_cpp_test")
 
 cc_library(
     name = "joshua_wire_board",
@@ -25,7 +26,7 @@ cc_library(
     ],
 )
 
-cc_test(
+ros2_cpp_test(
     name = "mixed_binding_test",
     srcs = ["mixed_binding_test.cc"],
     data = [
@@ -42,7 +43,8 @@ cc_test(
         "//robot/board/factory:board_factory",
         "//robot/comm/factory:comm_factory",
         "//robot/perception/factory:perception_factory",
-        "//ros2:mcu_bus_node",
+        "//ros2:actuator_subscriber_test_source",
+        "//ros2:mcu_bus_test_source",
         "//utils:joshua_runtime",
         "@googletest//:gtest_main",
         "@ros2_deps//:cpp_std_msgs",

@@ -12,7 +12,7 @@ claim a connection based only on configuration being present.
 
 Ask which hardware the user has and what they want it to do, then inspect the
 workspace and existing presets before asking for additional facts. Keep the
-[protobuf configuration](../../../config/README.md) authoritative. Catalog
+[protobuf configuration](../../../config/AGENTS.md) authoritative. Catalog
 metadata describes compiled software, not the attached hardware; a missing
 catalog entry alone does not establish incompatibility.
 
@@ -25,7 +25,7 @@ catalog entry alone does not establish incompatibility.
   subsystem's documented procedure.
 - **New component:** first check whether an existing board, transport, motor or
   sensor implementation can be reused. Read the relevant
-  [robot subsystem](../../../robot/README.md) contract and nearby tests. Use IDE
+  [robot subsystem](../../../robot/AGENTS.md) contract and nearby tests. Use IDE
   tools for code, build/factory registration, configuration, tests and docs;
   change protobuf only when its existing fields cannot describe the component.
   Run the supported Docker checks. Re-run `./scripts/joshua_mcp.sh prepare`,

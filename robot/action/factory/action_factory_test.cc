@@ -47,7 +47,7 @@ class ActionFactoryBoardPathTest : public ::testing::Test {
 
 // Board-layer single action: MOTOR_STS3215 bound to a MOCK board's
 // SERVO_BUS_UART channel, so the resolution flow runs without hardware
-// (docs/BOARD_LAYER_RFC.md §10 Phase 4 — MOTOR_STS3215 now resolves through
+// (robot/board/AGENTS.md — MOTOR_STS3215 now resolves through
 // BoardFactory like every other motor, no more transitional comm bridge).
 robot::action::SingleAction MakeBoardServoSingleAction() {
   robot::action::SingleAction single_action;
@@ -88,7 +88,7 @@ TEST_F(ActionFactoryBoardPathTest, CreatesSts3215DriverOverMockBoardChannel) {
 
 // Board-layer single action: MOTOR_STEPPER_NEMA17 bound to a MOCK board's
 // STEP_DIR channel, so the resolution flow runs without hardware
-// (docs/BOARD_LAYER_RFC.md §10 Phase 5).
+// (robot/board/AGENTS.md).
 robot::action::SingleAction MakeBoardStepperSingleAction() {
   robot::action::SingleAction single_action;
   single_action.set_action_type(robot::action::ActionType::ACTUATOR);

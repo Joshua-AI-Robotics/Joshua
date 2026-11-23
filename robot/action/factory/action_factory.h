@@ -38,7 +38,7 @@ class ActionFactory {
          }}};
     return entries;
   }
-  // Board-layer factory (docs/BOARD_LAYER_RFC.md §6.5): every actuator resolves
+  // Board-layer factory (robot/board/AGENTS.md): every actuator resolves
   // board_name against `boards`, validates motor_type against the channel's
   // drive, and constructs a motor driver. Callers must pass config.robot().boards()
   // (see ros2/actuator_subscriber.cc).
@@ -63,7 +63,7 @@ class ActionFactory {
   ActionFactory& operator=(ActionFactory&&) = default;
 
  private:
-  // Resolution flow per docs/BOARD_LAYER_RFC.md §6.5: board_name -> Board
+  // Resolution flow per robot/board/AGENTS.md: board_name -> Board
   // config -> ValidateMotorChannel -> BoardFactory -> OpenChannel -> motor
   // driver. The lookup itself lives in board_resolver.h, shared with
   // PerceptionFactory, so both layers resolve a channel the same way and
@@ -77,7 +77,7 @@ class ActionFactory {
           absl::StatusCode::kInvalidArgument,
           "Actuator '" + actuator.actuator_name() +
               "' sets deprecated actuator_type; omit it and set motor_type + board_name + "
-              "channel (docs/BOARD_LAYER_RFC.md §6.3).");
+              "channel (robot/board/AGENTS.md).");
     }
     if (actuator.motor_type() == robot::action::MOTOR_TI_DEMO ||
         actuator.has_am243_ethercat_config()) {
@@ -109,9 +109,8 @@ class ActionFactory {
       ABSL_RETURN_IF_ERROR(driver->Init());
       return driver;
     }
-    return absl::UnimplementedError(
-        "Motor type " + MotorType_Name(actuator.motor_type()) +
-        " has no board-layer driver yet (docs/BOARD_LAYER_RFC.md §10).");
+    return absl::UnimplementedError("Motor type " + MotorType_Name(actuator.motor_type()) +
+                                    " has no board-layer driver yet (robot/board/AGENTS.md).");
   }
 
   ActionFactory() = default;

@@ -57,7 +57,7 @@ absl::StatusOr<std::shared_ptr<BoardInterface>> CreateBoard(const robot::board::
                      config.name(),
                      "': board_type ",
                      BoardType_Name(config.board_type()),
-                     " is not implemented yet (docs/BOARD_LAYER_RFC.md §10)."));
+                     " is not implemented yet (robot/board/AGENTS.md)."));
   }
   return absl::InvalidArgumentError(
       absl::StrCat("Board '", config.name(), "' has an invalid board_type."));

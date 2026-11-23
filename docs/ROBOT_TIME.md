@@ -173,7 +173,7 @@ fabricated timestamp. Consumers call `RobotTime()` directly. Clock failures are
 reported as `RobotTimeError`, derived from `std::runtime_error`. Managed C++ nodes
 and the launcher use the shared `JOSHUA_MAIN`/`RunNode` boundary and
 `JoshuaInit(config)`; worker and destructor boundaries are described in the
-[ROS runtime documentation](../ros2/README.md#process-runtime-and-failure-handling).
+[ROS runtime documentation](../ros2/AGENTS.md#process-runtime-and-failure-handling).
 `TryRobotTime()` remains available as an optional
 `absl::StatusOr<double>` accessor with exception handling and finite-value checks.
 The actuator subscription boundary uses `TryRobotTime()` for headerless commands
@@ -259,7 +259,7 @@ no `/clock` integration is added here.
 
 `//ros2/utils:robot_timer` provides `CreateRobotTimer(node, period, callback)`.
 The period and deadlines are double RobotTime seconds. Position, camera, lidar,
-and audio publishers use this helper. Camera and lidar timers only publish
+audio and Xbox publishers use this helper. Camera and lidar timers only publish
 their own configured stream.
 
 A ROS wall timer wakes the executor at `min(period, 0.001)` seconds to check

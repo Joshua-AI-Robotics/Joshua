@@ -1,13 +1,13 @@
 # AM243 EtherCAT
 
-The runtime now uses the separate [JoshuaWire EtherCAT profile](../firmware/am243/joshua_dual_transport/README.md#opt-in-jw-ethercat-profile).
-See [configuration](../config/README.md#joshuawire-over-ethercat) and the
-[communication contract](../robot/comm/ethercat/README.md).
+The runtime now uses the separate [JoshuaWire EtherCAT profile](../firmware/am243/joshua_dual_transport/AGENTS.md#opt-in-jw-ethercat-profile).
+See [configuration](../config/AGENTS.md#joshuawire-over-ethercat) and the
+[communication contract](../robot/comm/ethercat/AGENTS.md).
 The TI-demo host path, codec, driver, smoke targets and preset are retired.
 Firmware build/flash assets below remain as historical bring-up material.
 
 Hardware qualification is deferred because of the
-[suspected master-side NIC timing issue](../robot/comm/ethercat/README.md#known-master-side-nic-timing-issue).
+[suspected master-side NIC timing issue](../robot/comm/ethercat/AGENTS.md#known-master-side-nic-timing-issue).
 
 ## Historical TI-Demo Hardware State
 

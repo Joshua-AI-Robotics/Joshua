@@ -1,0 +1,547 @@
+{
+  "schema_version": 2,
+  "id": "sunplus-spca2281-xwf-1080p",
+  "kind": "camera",
+  "manufacturer": "Sunplus Innovation Technology Inc.",
+  "model": "XWF-1080P",
+  "aliases": [
+    "SPCA2281",
+    "Sunplus SPCA2281"
+  ],
+  "revisions": [],
+  "identifiers": {},
+  "capabilities": [
+    "image-capture"
+  ],
+  "specifications": [],
+  "integration": {
+    "status": "integrated",
+    "driver": "CvCamera / OpenCV V4L2",
+    "implementations": [
+      "robot/perception/camera/cv_camera.cc"
+    ],
+    "presets": [
+      "config/config_preset/example/sunplus_spca2281.pbtxt"
+    ],
+    "guide": "robot/perception/AGENTS.md",
+    "support_scope": "Image capture through the existing OpenCV/V4L2 driver using the example preset on Linux."
+  },
+  "documentation": [],
+  "maintainers": [],
+  "category_details": {
+    "capture_modes": [
+      "640x480 MJPG requested 30 FPS",
+      "1920x1080 MJPG requested 30 FPS"
+    ],
+    "timestamp_semantics": "ROS publisher and host receipt timestamps; exposure timing not verified"
+  },
+  "limitations": [
+    "Physical results apply only to the listed unit, firmware, setup and workload; untested capabilities are not qualified.",
+    "Hardware revision and responsible maintainer are not recorded in the imported evidence."
+  ],
+  "validation_history": [
+    {
+      "id": "sunplus-spca2281-2026-11-04-humble-640x480",
+      "date": "2026-11-04",
+      "date_timezone": "America/Los_Angeles",
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": "74ecbcc618658358de2bbc9048fe9d60df7acadb",
+        "source_state": "Recorded source commit; exact dirty-tree state not independently recorded.",
+        "build_flags": [],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "capture",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "capture_format": "MJPG",
+        "width": 640,
+        "height": 480,
+        "encoding": "rgb8",
+        "received_frames": 91,
+        "duration_seconds": 10.634,
+        "measured_fps": 8.46,
+        "bytes_per_frame": 921600
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "792f87e379972a8e4f528d4736692ccef2e70e8b57796d9022644155b2134b36",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "# Sunplus SPCA2281 / XWF-1080P camera test\n\nManual test on November 4, 2026 (America/Los_Angeles), against Joshua commit\n`74ecbcc618658358de2bbc9048fe9d60df7acadb`. This records the camera run performed\nwhile adding the [Sunplus preset](../../../config/config_preset/example/sunplus_spca2281.pbtxt).\nIt is a short test of one unit, not an endurance or model-wide qualification.\n\n## Setup and procedure\n\n- USB product description: `Sunplus Innovation Technology Inc. SPCA2281 Web Camera`.\n- V4L2 product: `XWF-1080P: XWF-1080P`; capture node `/dev/video0`.\n- Ubuntu 22.04 / ROS 2 Humble / x86_64 in the Joshua Docker environment.\n- Ran `//ros2:camera_publisher` directly with node name `sunplus_camera_publisher`,\n  node ID `1`, and the Sunplus preset. No actuator or board node was launched.\n- Used ROS domain `114` and `ROS_LOCALHOST_ONLY=1`.\n- Subscribed to `/sunplus_camera/image_raw` with a reliable rclpy subscription,\n  depth 10, for a 12-second observation window including startup and discovery.\n- Counted received messages using the subscriber's monotonic receipt times.\n  Validated dimensions, encoding, and payload length, and saved a sample frame.\n- Separately ran Joshua's `//ros2/utils:camera_subscriber` desktop preview and\n  confirmed that it received and displayed images. Capture was stopped afterward.\n\nThe publisher's successful initialization log reported 640x480 and a negotiated\n30 FPS. The observed message rate below is measured separately; negotiating a\nrate does not establish that the device delivers it.\n\n## Retained result summary\n\n```json\n{\n  \"received_frames\": 91,\n  \"duration_seconds\": 10.634,\n  \"measured_fps\": 8.46,\n  \"width\": 640,\n  \"height\": 480,\n  \"encoding\": \"rgb8\",\n  \"step\": 1920,\n  \"bytes_per_frame\": 921600,\n  \"byte_min\": 0,\n  \"byte_max\": 255,\n  \"topic\": \"/sunplus_camera/image_raw\",\n  \"subscriber_qos\": \"reliable\",\n  \"requested_fps\": 30\n}\n```\n\nThe configured capture format was MJPG; initialization applied it successfully.\nA V4L2 format query during an earlier run also confirmed MJPG at 640x480.\nDirect OpenCV comparisons at 640x480, requesting 30 FPS with a one-frame buffer,\ncaptured 60 frames in 7.444 seconds with MJPG and 7.338 seconds with YUYV.\nThese measurements establish that the low capture rate also occurred outside\nJoshua; they do not establish its underlying cause.\n\nThe config preset validation and perception factory tests passed in the Humble\nDocker environment. They establish software checks separately from this manual\nhardware evidence. Camera frames are not committed because they contain imagery\nfrom the local environment; this document retains the measured summary.\n\n## Scope and reproduction\n\nOnly 640x480 capture and RGB ROS output were verified. Although the camera\nadvertised larger modes, including 1920x1080, those modes were not exercised.\nJazzy, other hardware revisions, synchronization accuracy, and sustained\n30 FPS operation were not verified.\n\nFor a new run, follow the [hardware rules](../../../AGENTS.md#hardware-safety--read-this-first),\nconfirm the camera's capture index, build the publisher and viewer in the\nmatching Docker environment, and run the same preset. The preset remains the\nconfiguration source of truth. A historical test does not establish that the\ncurrently connected device is ready or grant permission to open it.\n",
+          "source_path": "docs/hardware_catalog/evidence/sunplus_spca2281_2026-11-04.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "Short capture and desktop preview on one physical unit; no endurance or cross-platform qualification.",
+        "Requested 30 FPS; measured 8.46 FPS with a reliable ROS subscriber. Direct OpenCV capture also achieved approximately 8 FPS.",
+        "1080p capture was not tested. The model name and advertised modes are not verification evidence.",
+        "The preset uses camera index 0; resolve the connected device before running because indices can change.",
+        "USB VID:PID and model aliases identify a candidate model, not a unique physical unit or a guarantee for every hardware revision."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "sunplus-spca2281-2026-11-04-humble-640x480-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "sunplus-spca2281-xwf-1080p",
+            "unit_alias": "sunplus-spca2281-2026-11-04-humble-640x480-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "One USB camera, Joshua camera publisher and reliable local ROS subscriber",
+        "wiring": [],
+        "power": "USB power; host/controller topology not retained",
+        "firmware": [],
+        "configuration": [
+          {
+            "path": "config/config_preset/example/sunplus_spca2281.pbtxt",
+            "sha256": null,
+            "overrides": [
+              "Physical camera index resolved for the recorded run; do not assume index 0 for a new run."
+            ]
+          }
+        ],
+        "environment": {
+          "os": "Ubuntu 22.04 (Docker)",
+          "ros_distribution": "Humble",
+          "architecture": "x86_64"
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "camera-640x480-capture-v1",
+        "version": 1,
+        "title": "640x480 ROS capture smoke check",
+        "kinds": [
+          "camera"
+        ],
+        "criteria_provenance": "historical_reconstruction",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "One camera; 12 s observation including discovery; retained 10.634 s sample.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "capture",
+            "capability": "image-capture",
+            "metric": "Valid RGB ROS images received",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "ROS subscriber validates dimensions, encoding and payload size."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Historical reconstruction describes the recorded check; it does not claim a new predeclared procedure or broader qualification."
+        ]
+      }
+    },
+    {
+      "id": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s",
+      "date": "2026-11-04",
+      "date_timezone": "America/Los_Angeles",
+      "started_at": null,
+      "completed_at": null,
+      "executed_by": null,
+      "validated_at": null,
+      "validated_by": null,
+      "organization": null,
+      "review_reference": null,
+      "review_status": "unreviewed",
+      "provenance": "historical",
+      "software": {
+        "joshua_commit": "261887dfdcfd9645b846ecffe3a3f30cfb3f111b",
+        "source_state": "Recorded base commit plus the uncommitted change from one to two camera capture buffers; the 1080p preset was added for this run.",
+        "build_flags": [
+          "-c opt",
+          "--config=u22",
+          "--config=x86-base",
+          "python_version=3.10"
+        ],
+        "container_digest": null
+      },
+      "result": "passed",
+      "checks": [
+        {
+          "check_id": "capture",
+          "observed": true,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "mean-rate",
+          "observed": 30.003333,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "window-rate",
+          "observed": 29.9,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "max-gap",
+          "observed": 56.313,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "invalid-frames",
+          "observed": 0,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        },
+        {
+          "check_id": "stamp-order",
+          "observed": 0,
+          "outcome": "passed",
+          "evidence_ids": [
+            "record"
+          ]
+        }
+      ],
+      "measurements": {
+        "capture_format": "MJPG",
+        "width": 1920,
+        "height": 1080,
+        "encoding": "rgb8",
+        "bytes_per_frame": 6220800,
+        "capture_buffers_requested": 2,
+        "requested_fps": 30,
+        "negotiated_fps": 30.0,
+        "warmup_seconds": 5,
+        "measurement_seconds": 300.0,
+        "received_frames": 9001,
+        "measured_fps": 30.003333,
+        "publisher_stamp_fps": 30.002796,
+        "ten_second_window_fps": [
+          30.1,
+          30.0,
+          30.0,
+          30.0,
+          29.9,
+          30.1,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0,
+          30.0
+        ],
+        "minimum_ten_second_window_fps": 29.9,
+        "maximum_ten_second_window_fps": 30.1,
+        "max_frame_gap_ms": 56.313,
+        "frame_gap_p99_ms": 46.064,
+        "invalid_frames": 0,
+        "nonincreasing_publisher_stamps": 0,
+        "subscriber_qos": "reliable",
+        "sustained_30fps_criteria": {
+          "minimum_mean_fps": 29.5,
+          "minimum_ten_second_window_fps": 29.0,
+          "maximum_frame_gap_ms": 100.0
+        },
+        "sustained_30fps_passed": true
+      },
+      "evidence": [
+        {
+          "id": "record",
+          "sha256": "ecefdecf8b78e5dde553bce3924678ef53f9a9997bde3aeef721a5b58d144d7c",
+          "media_type": "text/markdown",
+          "availability": "inline",
+          "description": "Retained historical test narrative",
+          "notes": "# Sunplus SPCA2281 / XWF-1080P: sustained 1080p capture\n\nManual test on November 4, 2026 (America/Los_Angeles). Joshua delivered\n1920x1080 RGB images at approximately 30 FPS for a 300-second measurement window.\nThis result uses an optimized build and the two-buffer capture fix described\nbelow. It does not qualify every build mode, hardware revision, or environment.\n\n## Source and setup\n\n- Source base: `261887dfdcfd9645b846ecffe3a3f30cfb3f111b`.\n- The test tree additionally changed `CvCamera` from one capture buffer to two\n  and added the [1080p preset](../../../config/config_preset/example/sunplus_spca2281_1080p.pbtxt).\n  Those changes were uncommitted during the run; the base commit alone does not\n  contain the tested buffer setting or preset.\n- Tested driver SHA-256:\n  `f3ede40449aee042d16d68a683a7efd6668e9e602d5da7216aa1805b98201fe2`.\n- Tested preset SHA-256:\n  `27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a`.\n- Ubuntu 22.04 / ROS 2 Humble / x86_64 in the Joshua Docker environment.\n- Build flags: `-c opt --config=u22 --config=x86-base` and\n  `--@rules_python//python/config_settings:python_version=3.10`.\n- Only the standalone camera publisher and a measurement subscriber ran. No\n  actuator, board, or robot preset was launched.\n- The camera's original automatic-exposure settings were used throughout the\n  final run. A separate temporary manual-exposure diagnostic did not improve\n  the single-buffer rate; its settings were restored before qualification.\n\n## Measurement procedure\n\nThe camera advertised 1920x1080 MJPG at 30 FPS and YUYV at 5 FPS. The test used\nMJPG and verified the active format, dimensions, and negotiated 30 FPS through\nV4L2 while the publisher was running. Negotiation was checked separately from\nthe measured delivery rate.\n\nRan `//ros2:camera_publisher` with node ID `1` and the 1080p preset. A reliable\nrclpy subscriber with depth 10 read `/sunplus_camera/image_raw` on a loopback-only\nROS domain. After a five-second warmup from the first received message, it\ncounted messages for exactly 300 seconds using monotonic receipt times.\n\nEvery received frame was checked for width 1920, height 1080, encoding `rgb8`,\nrow stride 5760, and payload length 6220800 bytes. The measurement retained\nreceipt intervals, publisher timestamps, and counts in consecutive 10-second\nwindows. A final image was saved locally; camera imagery is not committed.\n\nBefore the run, the acceptance criteria were set to mean delivery of at least\n29.5 FPS, at least 29 FPS in every full 10-second window, no receipt gap above\n100 ms, no invalid frame metadata/payload lengths, and strictly increasing\npublisher timestamps. These criteria verify approximately 30 FPS delivery for\nthis finite run, not sensor-level exposure timing or loss-free acquisition.\n\n## Results\n\n| Measurement | Observed |\n| --- | --- |\n| Measurement window | 300 seconds, following a five-second warmup |\n| Frames received | 9001 |\n| Mean delivery rate | 30.003333 FPS |\n| Rate from publisher timestamp span | 30.002796 FPS |\n| Lowest / highest 10-second window | 29.9 / 30.1 FPS |\n| Longest receipt gap | 56.313 ms |\n| 99th percentile receipt gap | 46.064 ms |\n| Invalid frame metadata or payload lengths | 0 |\n| Repeated or decreasing publisher timestamps | 0 |\n| Acceptance criteria | Passed |\n\nAll 30 individual window rates are retained in the\n[structured test record](../../hardware_test_records.json). The publisher remained\nactive throughout measurement and was stopped afterward; the camera was released\nand its original exposure settings were confirmed. An empty-frame warning\ncoincided with SIGINT during shutdown, after the measurement window; it was not\nan outage during the timed run.\n\n## Diagnosing the initial frame-rate limit\n\n| Short comparison | Frames / duration | Measured rate |\n| --- | --- | --- |\n| Original Joshua development build, one buffer | 153 / 10 seconds | 15.3 FPS |\n| Direct OpenCV, automatic exposure, one buffer | 123 / 8.032 seconds | 15.313 FPS |\n| Direct OpenCV, temporary manual exposure, one buffer | 120 / 8.000 seconds | 15.000 FPS |\n| Direct OpenCV, one buffer, JPEG decoding disabled | 97 / 6.032 seconds | 16.081 FPS |\n| Direct OpenCV, two buffers, JPEG decoded | 180 / 6.000 seconds | 29.999 FPS |\n| Direct OpenCV, four buffers, JPEG decoded | 181 / 6.030 seconds | 30.014 FPS |\n| Joshua development build, two buffers | 232 / 10 seconds | 23.2 FPS |\n| Joshua optimized build, two buffers | 301 / 10 seconds | 30.1 FPS |\n\nTwo capture buffers let the driver keep the next frame queued while the\nprevious buffer is dequeued. The comparisons demonstrate that a single buffer\nlimited this setup, and that the development build remained slower than the\noptimized build. The 300-second run above is the sustained qualification.\n\n## Reproduction and scope\n\nFollow the [hardware rules](../../../AGENTS.md#hardware-safety--read-this-first) and\nconfirm the camera's capture index before running. Inside a Joshua Docker\ndevelopment shell, use the tested two-buffer driver and run:\n\n```sh\nbazel run -c opt --config=u22 --config=x86-base \\\n  --@rules_python//python/config_settings:python_version=3.10 \\\n  //ros2:camera_publisher -- sunplus_1080p_publisher 1 \\\n  config/config_preset/example/sunplus_spca2281_1080p.pbtxt\n```\n\nUse a reliable subscriber on the image topic to repeat the timed procedure;\nthe camera's advertised or negotiated rate alone is insufficient. This run\ndoes not qualify Jazzy, other lighting conditions, longer operation, camera\nexposure timestamps, or other hardware revisions.\n",
+          "source_path": "docs/hardware_catalog/evidence/sunplus_spca2281_1080p_2026-11-04.md",
+          "source_revision": "2c8a9c735e1f007dd1717685d807d5ec42bf13ae"
+        }
+      ],
+      "limitations": [
+        "A five-minute run on one physical unit and one Ubuntu 22.04/Humble setup; not an endurance or cross-platform qualification.",
+        "This result requires the two-buffer capture change and an optimized build. With two buffers, the default development build measured 23.2 FPS in the short comparison.",
+        "The recorded Joshua commit is the source base; the driver change and new preset were uncommitted during measurement. Their exact SHA-256 hashes are retained in the environment.",
+        "Frame rate and gaps were measured at the ROS subscriber. Publisher timestamps do not establish camera-exposure timing, synchronization accuracy, or delivery of every sensor exposure.",
+        "The final automatic-exposure settings matched the original settings. Other lighting conditions and hardware revisions were not qualified."
+      ],
+      "unknowns": {
+        "started_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "completed_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "executed_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_at": "Not recorded in the original evidence; migration is not execution or validation.",
+        "validated_by": "Not recorded in the original evidence; migration is not execution or validation.",
+        "organization": "Not recorded in the original evidence; migration is not execution or validation.",
+        "review_reference": "Not recorded in the original evidence; migration is not execution or validation.",
+        "software.container_digest": "Exact Docker image digest was not retained."
+      },
+      "supersedes": null,
+      "reproduces": null,
+      "setup": {
+        "id": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s-setup",
+        "subjects": [
+          {
+            "role": "device",
+            "hardware_id": "sunplus-spca2281-xwf-1080p",
+            "unit_alias": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s-setup-unit",
+            "revision": null
+          }
+        ],
+        "topology": "One USB camera, Joshua camera publisher and reliable local ROS subscriber",
+        "wiring": [],
+        "power": "USB power; host/controller topology not retained",
+        "firmware": [],
+        "configuration": [
+          {
+            "path": "config/config_preset/example/sunplus_spca2281_1080p.pbtxt",
+            "sha256": "27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a",
+            "overrides": [
+              "Physical camera index resolved for the recorded run; do not assume index 0 for a new run."
+            ]
+          }
+        ],
+        "environment": {
+          "os": "Ubuntu 22.04 (Docker)",
+          "ros_distribution": "Humble",
+          "architecture": "x86_64",
+          "build_mode": "opt (-c opt)",
+          "source_state": "Recorded base commit plus the uncommitted change from one to two camera capture buffers; the 1080p preset was added for this run.",
+          "camera_driver_sha256": "f3ede40449aee042d16d68a683a7efd6668e9e602d5da7216aa1805b98201fe2",
+          "preset": "config/config_preset/example/sunplus_spca2281_1080p.pbtxt",
+          "preset_sha256": "27cd16f5d8eb0a130799728e459cdd586ea3eca2ca59473da708c6c818916b3a",
+          "exposure": "Original automatic exposure settings; no manual exposure adjustment during the qualification run."
+        },
+        "calibration": [],
+        "conditions": [
+          "Historical setup imported without new hardware execution."
+        ],
+        "unknowns": {
+          "subjects.device.revision": "Not recorded in the original evidence.",
+          "host": "Exact host model, kernel, container digest and RMW version not recorded.",
+          "instruments": "Calibration/instrument identities not recorded."
+        }
+      },
+      "specification": {
+        "id": "camera-1080p-delivery-v1",
+        "version": 1,
+        "title": "1080p ROS delivery at approximately 30 FPS",
+        "kinds": [
+          "camera"
+        ],
+        "criteria_provenance": "recorded_before_run",
+        "source": "evidence:record",
+        "prerequisites": [
+          "Follow root hardware authorization and the model operating guide.",
+          "Freeze firmware, source, setup and configuration before a new test."
+        ],
+        "procedure": [
+          "Reproduce the steps in the retained historical evidence.",
+          "Record actual observations, failures, exact timestamps and operator identity for a new run."
+        ],
+        "workload": "One camera; 5 s warmup and 300 s measurement.",
+        "measurement_point": "As recorded in the source; host/protocol observations are not physical output measurements.",
+        "clock_domains": [
+          "Use the clocks stated in the historical evidence; unknown domains remain unknown."
+        ],
+        "checks": [
+          {
+            "id": "capture",
+            "capability": "image-capture",
+            "metric": "Valid RGB ROS images received",
+            "unit": "boolean",
+            "operator": "eq",
+            "expected": true,
+            "measurement_method": "ROS subscriber validates dimensions, encoding and payload size."
+          },
+          {
+            "id": "mean-rate",
+            "capability": "image-capture",
+            "metric": "Mean ROS delivery rate",
+            "unit": "Hz",
+            "operator": "gte",
+            "expected": 29.5,
+            "measurement_method": "Monotonic subscriber receipts over 300 seconds after warmup."
+          },
+          {
+            "id": "window-rate",
+            "capability": "image-capture",
+            "metric": "Minimum complete ten-second window rate",
+            "unit": "Hz",
+            "operator": "gte",
+            "expected": 29.0,
+            "measurement_method": "Minimum of all thirty ten-second windows."
+          },
+          {
+            "id": "max-gap",
+            "capability": "image-capture",
+            "metric": "Maximum host receipt gap",
+            "unit": "ms",
+            "operator": "lte",
+            "expected": 100.0,
+            "measurement_method": "Largest adjacent monotonic subscriber receipt interval."
+          },
+          {
+            "id": "invalid-frames",
+            "capability": "image-capture",
+            "metric": "Invalid frames",
+            "unit": "count",
+            "operator": "eq",
+            "expected": 0,
+            "measurement_method": "Check dimensions, encoding, stride and payload length."
+          },
+          {
+            "id": "stamp-order",
+            "capability": "image-capture",
+            "metric": "Nonincreasing publisher stamps",
+            "unit": "count",
+            "operator": "eq",
+            "expected": 0,
+            "measurement_method": "Compare adjacent publisher timestamps; not exposure times."
+          }
+        ],
+        "required_evidence": [
+          "Setup/configuration and source/firmware provenance",
+          "Observed measurements or protocol results with retained logs",
+          "Execution and review identities/times, or explicit historical gaps"
+        ],
+        "limitations": [
+          "Criteria were recorded before the original run; migration retains them without expanding scope. Exposure timing, other lighting/revisions and endurance were not qualified."
+        ]
+      }
+    }
+  ],
+  "support_history": [
+    {
+      "id": "sunplus-spca2281-2026-11-04-humble-640x480-assessment",
+      "capabilities": [
+        "image-capture"
+      ],
+      "run_ids": [
+        "sunplus-spca2281-2026-11-04-humble-640x480"
+      ],
+      "status": "historical_unreviewed",
+      "scope": "Recorded capture result for this setup only; no newly attributed review or model-wide qualification.",
+      "validated_at": null,
+      "validated_by": null,
+      "review_reference": null,
+      "limitations": [
+        "Short capture and desktop preview on one physical unit; no endurance or cross-platform qualification.",
+        "Requested 30 FPS; measured 8.46 FPS with a reliable ROS subscriber. Direct OpenCV capture also achieved approximately 8 FPS.",
+        "1080p capture was not tested. The model name and advertised modes are not verification evidence.",
+        "The preset uses camera index 0; resolve the connected device before running because indices can change.",
+        "USB VID:PID and model aliases identify a candidate model, not a unique physical unit or a guarantee for every hardware revision."
+      ],
+      "supersedes": null
+    },
+    {
+      "id": "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s-assessment",
+      "capabilities": [
+        "image-capture"
+      ],
+      "run_ids": [
+        "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s"
+      ],
+      "status": "historical_unreviewed",
+      "scope": "Recorded capture result for this setup only; no newly attributed review or model-wide qualification.",
+      "validated_at": null,
+      "validated_by": null,
+      "review_reference": null,
+      "limitations": [
+        "A five-minute run on one physical unit and one Ubuntu 22.04/Humble setup; not an endurance or cross-platform qualification.",
+        "This result requires the two-buffer capture change and an optimized build. With two buffers, the default development build measured 23.2 FPS in the short comparison.",
+        "The recorded Joshua commit is the source base; the driver change and new preset were uncommitted during measurement. Their exact SHA-256 hashes are retained in the environment.",
+        "Frame rate and gaps were measured at the ROS subscriber. Publisher timestamps do not establish camera-exposure timing, synchronization accuracy, or delivery of every sensor exposure.",
+        "The final automatic-exposure settings matched the original settings. Other lighting conditions and hardware revisions were not qualified."
+      ],
+      "supersedes": null
+    }
+  ],
+  "compatibility": {
+    "model_order": 0,
+    "run_order": [
+      "sunplus-spca2281-2026-11-04-humble-640x480",
+      "sunplus-spca2281-2026-11-04-humble-1080p-opt-300s"
+    ]
+  }
+}

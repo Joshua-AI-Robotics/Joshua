@@ -6,6 +6,34 @@ Joshua is a config-driven robotics stack: one protobuf text config defines hardw
 
 A representative preset: [`config/config_preset/so100/teleoperate.pbtxt`](../config/config_preset/so100/teleoperate.pbtxt).
 
+## Directory contracts
+
+Each linked `AGENTS.md` is the authoritative local rule and architecture contract.
+This page maps owners; it does not maintain a second copy of their dependency,
+initialization, or lifecycle rules. Shared design principles live in
+[root coding guidelines](../AGENTS.md#coding-guidelines).
+
+| Area | Authoritative contract |
+| --- | --- |
+| Protobuf schemas, presets, and validation | [config/AGENTS.md](../config/AGENTS.md) |
+| Shared robot-layer invariants | [robot/AGENTS.md](../robot/AGENTS.md) |
+| Motor semantics and command conversion | [robot/action/AGENTS.md](../robot/action/AGENTS.md) |
+| Sensor I/O and backend cancellation | [robot/perception/AGENTS.md](../robot/perception/AGENTS.md) |
+| Board protocols, channels, and coordinators | [robot/board/AGENTS.md](../robot/board/AGENTS.md) |
+| Transport capabilities and physical connection ownership | [robot/comm/AGENTS.md](../robot/comm/AGENTS.md) |
+| Component nodes, acquisition scheduling, callbacks, and real-node tests | [ros2/AGENTS.md](../ros2/AGENTS.md) |
+| Graph processes, readiness, rollback, and shutdown | [launcher/AGENTS.md](../launcher/AGENTS.md) |
+| Shared clocks and process failure boundaries | [utils/AGENTS.md](../utils/AGENTS.md) |
+| Model adapters and data pipelines | [ai/AGENTS.md](../ai/AGENTS.md) |
+| Simulators and backend environments | [simulation/AGENTS.md](../simulation/AGENTS.md) |
+| Firmware adapters and portable protocol code | [firmware/AGENTS.md](../firmware/AGENTS.md) |
+| Developer tools and recording | [tools/AGENTS.md](../tools/AGENTS.md) |
+| Standalone Xbox controller input | [tools/teleop/xbox_controller/AGENTS.md](../tools/teleop/xbox_controller/AGENTS.md) |
+| Read-only MCP adapters and observation boundaries | [tools/mcp/AGENTS.md](../tools/mcp/AGENTS.md) |
+| Container tasks, setup, and artifact preparation | [scripts/AGENTS.md](../scripts/AGENTS.md) |
+| Hardware catalog data, validation specifications and evidence | [docs/hardware_catalog/AGENTS.md](hardware_catalog/AGENTS.md) |
+| Documentation ownership | [docs/AGENTS.md](AGENTS.md) |
+
 ## Configuration layer (Protobuf)
 
 All static configuration uses Protocol Buffers:
@@ -66,32 +94,22 @@ It loads the config, resolves executables, and owns each job's guardian,
 application PID, process group, readiness channels, exit history, and shutdown
 sequence. ROS nodes and simulation share that manager and one registry of plain
 node records. Robot drivers and ROS objects remain inside their application
-process. See the [node manager guide](../launcher/node_manager/README.md) for the
-Linux ownership contract and [ROS runtime guide](../ros2/README.md#process-runtime-and-failure-handling)
+process. See the [node manager guide](../launcher/node_manager/AGENTS.md) for the
+Linux ownership contract and [ROS runtime guide](../ros2/AGENTS.md#process-runtime-and-failure-handling)
 for startup, cancellation, and cleanup.
 
 ## Hardware topology and latency budgets
 
-For high-bandwidth sensing or tight actuator deadlines, prefer separate actuator
-and sensor-acquisition boards with independent physical links. Shared boards/links
-remain supported when measurements show sufficient bandwidth and latency headroom
-under the intended worst-case workload. Keep feedback needed by the local motor
-control loop, such as encoder/current measurements, on the actuator controller.
-
-Queues and priorities manage contention but do not guarantee deadlines. Separate
-ROS nodes do not isolate a shared link, and separate boards may still contend for
-USB-controller or host resources. Qualify either arrangement against its command,
-stop and sensor-loss budgets; see the
-[topology comparison checklist](SERIAL_COMM_QUALIFICATION.md#hardware-topology-comparison-todo)
-for measurement requirements and outstanding work.
+The normative topology and qualification rules live in
+[robot/AGENTS.md](../robot/AGENTS.md#hardware-topology-and-latency-budgets).
 
 ## Related documentation
 
 - [Xbox controller tool](../tools/teleop/xbox_controller/AGENTS.md) — standalone
   operator input, device ownership, ROS payload, and build/run commands
 - [Getting started](GETTING_STARTED.md) — install and first run
-- [ai/README.md](../ai/README.md) — inference engine, model plug-ins, per-model venvs
-- [ai/train/README.md](../ai/train/README.md) — data collection (DataStore)
-- [simulation/README.md](../simulation/README.md) — MuJoCo and Isaac Sim backends
-- [ros2/README.md](../ros2/README.md) — ROS 2 type resolver utilities
-- [launcher/node_manager/README.md](../launcher/node_manager/README.md) — node lifecycle and process ownership
+- [ai/AGENTS.md](../ai/AGENTS.md) — inference engine, model plug-ins, per-model venvs
+- [ai/train/AGENTS.md](../ai/train/AGENTS.md) — data collection (DataStore)
+- [simulation/AGENTS.md](../simulation/AGENTS.md) — MuJoCo and Isaac Sim backends
+- [ros2/AGENTS.md](../ros2/AGENTS.md) — ROS 2 type resolver utilities
+- [launcher/node_manager/AGENTS.md](../launcher/node_manager/AGENTS.md) — node lifecycle and process ownership
