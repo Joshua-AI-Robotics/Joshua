@@ -55,6 +55,7 @@ def main():
     flags = [
         f"--config={args.stack}",
         "--config=x86-base",
+        "--repo_contents_cache=",
         "--@rules_python//python/config_settings:python_version="
         + ("3.10" if args.stack == "u22" else "3.12"),
     ]
