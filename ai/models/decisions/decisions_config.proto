@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package ai.models;
+
+import "ai/inference/proto/motor_policy.proto";
+
+message DecisionsConfig {
+  ai.inference.MotorPolicy policy = 1;
+  string model = 2;
+  // Inclusive probability threshold, required even when it is zero.
+  optional double min_confidence = 3;
+  // Bounds measured from local receipt and submission respectively, including pending time.
+  uint32 max_receipt_age_ms = 4;
+  uint32 deadline_ms = 5;
+  // Includes the first attempt. Allowed range is 1..3.
+  uint32 max_attempts = 6;
+}

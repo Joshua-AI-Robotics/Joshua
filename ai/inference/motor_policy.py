@@ -38,6 +38,7 @@ class EvidenceSample:
     name: str
     id: SampleId
     payload: str | Rgb8
+    received_monotonic_ns: int | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class MeasuredPosition:
     id: SampleId
     value: float
     unit: int
+    received_monotonic_ns: int | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,17 @@ class NoCommand(str, Enum):
     MISSING_MEASURED_POSITION = "missing_measured_position"
     MISMATCHED_ANSWER = "mismatched_answer"
     UNKNOWN_CHOICE = "unknown_choice"
+    REFUSED = "refused"
+    LOW_CONFIDENCE = "low_confidence"
+    MALFORMED_RESPONSE = "malformed_response"
+    PROVIDER_FAILED = "provider_failed"
+    RATE_LIMITED = "rate_limited"
+    EXPIRED = "expired"
+    DUPLICATE = "duplicate"
+    INACTIVE = "inactive"
+    WRONG_SESSION = "wrong_session"
+    WRONG_SOURCE = "wrong_source"
+    SUPERSEDED = "superseded"
     NO_COMMAND = "no_command"
     TARGET_OUT_OF_BOUNDS = "target_out_of_bounds"
 
@@ -84,6 +97,7 @@ class PolicyResult:
     request_id: RequestId
     samples: tuple[SampleId, ...]
     outcome: JointCommand | NoCommand
+    expires_monotonic_ns: int | None = None
 
 
 def _counter(value: int) -> bool:
@@ -131,26 +145,20 @@ def _valid_payload(kind: int, payload: str | Rgb8) -> bool:
     return True
 
 
-def evaluate_choice(
-    policy: MotorPolicy,
-    request: PolicyRequest,
-    provider: Callable[[MotorPolicy.Question, PolicyRequest], ChoiceAnswer],
-) -> PolicyResult:
-    """Evaluate one fixed-choice request against a policy accepted by ValidateConfig."""
-    samples = tuple(sample.id for sample in request.evidence)
-    measured = request.measured
-    if measured is not None:
-        samples += (measured.id,)
+def sample_ids(request: PolicyRequest) -> tuple[SampleId, ...]:
+    ids = tuple(sample.id for sample in request.evidence)
+    return ids if request.measured is None else (*ids, request.measured.id)
 
-    def result(outcome: JointCommand | NoCommand) -> PolicyResult:
-        return PolicyResult(request.id, samples, outcome)
 
+def bind_question(
+    policy: MotorPolicy, request: PolicyRequest
+) -> MotorPolicy.Question | NoCommand:
     if (
         type(request.version) is not int
         or request.version != 1
         or policy.requirements.version != request.version
     ):
-        return result(NoCommand.INCOMPATIBLE_VERSION)
+        return NoCommand.INCOMPATIBLE_VERSION
     identity = request.id
     if (
         not identity.run
@@ -158,21 +166,22 @@ def evaluate_choice(
         or not _counter(identity.generation)
         or not _counter(identity.sequence)
     ):
-        return result(NoCommand.INVALID_REQUEST_IDENTITY)
-    if not all(_valid_sample_id(sample) for sample in samples):
-        return result(NoCommand.INVALID_SAMPLE_IDENTITY)
+        return NoCommand.INVALID_REQUEST_IDENTITY
+    if not all(_valid_sample_id(sample) for sample in sample_ids(request)):
+        return NoCommand.INVALID_SAMPLE_IDENTITY
 
     question = next((q for q in policy.questions if q.id == request.question_id), None)
     if question is None:
-        return result(NoCommand.UNKNOWN_QUESTION)
+        return NoCommand.UNKNOWN_QUESTION
     kinds = {source.name: source.kind for source in policy.requirements.evidence}
     names = [sample.name for sample in request.evidence]
     if len(names) != len(question.inputs) or set(names) != set(question.inputs):
-        return result(NoCommand.INVALID_INPUTS)
+        return NoCommand.INVALID_INPUTS
     if not all(_valid_payload(kinds[s.name], s.payload) for s in request.evidence):
-        return result(NoCommand.INVALID_EVIDENCE)
+        return NoCommand.INVALID_EVIDENCE
 
     joint = next(j for j in policy.requirements.joints if j.name == question.joint_name)
+    measured = request.measured
     if measured is not None:
         if (
             measured.joint_name != joint.name
@@ -180,32 +189,53 @@ def evaluate_choice(
             or type(measured.value) not in (int, float)
             or not joint.minimum <= measured.value <= joint.maximum
         ):
-            return result(NoCommand.INVALID_MEASURED_POSITION)
+            return NoCommand.INVALID_MEASURED_POSITION
     if measured is None and any(c.HasField("position_delta") for c in question.choices):
-        return result(NoCommand.MISSING_MEASURED_POSITION)
+        return NoCommand.MISSING_MEASURED_POSITION
 
-    answer = provider(question, request)
+    return question
+
+
+def map_answer(
+    policy: MotorPolicy,
+    request: PolicyRequest,
+    question: MotorPolicy.Question,
+    answer: ChoiceAnswer,
+) -> JointCommand | NoCommand:
     if (
         not isinstance(answer, ChoiceAnswer)
-        or answer.request_id != identity
+        or answer.request_id != request.id
         or answer.question_id != question.id
     ):
-        return result(NoCommand.MISMATCHED_ANSWER)
+        return NoCommand.MISMATCHED_ANSWER
     choice = next((c for c in question.choices if c.label == answer.label), None)
     if choice is None:
-        return result(NoCommand.UNKNOWN_CHOICE)
+        return NoCommand.UNKNOWN_CHOICE
     if choice.HasField("no_command"):
-        return result(NoCommand.NO_COMMAND)
+        return NoCommand.NO_COMMAND
+    joint = next(j for j in policy.requirements.joints if j.name == question.joint_name)
     if choice.HasField("position_delta"):
-        target = measured.value + choice.position_delta
+        target = request.measured.value + choice.position_delta
     else:
         target = choice.position
     if not joint.minimum <= target <= joint.maximum:
-        return result(NoCommand.TARGET_OUT_OF_BOUNDS)
-    return result(
-        JointCommand(
-            joint_name=joint.name,
-            position=target,
-            position_encoding=JointCommand.POSITION_SI,
-        )
+        return NoCommand.TARGET_OUT_OF_BOUNDS
+    return JointCommand(
+        joint_name=joint.name,
+        position=target,
+        position_encoding=JointCommand.POSITION_SI,
     )
+
+
+def evaluate_choice(
+    policy: MotorPolicy,
+    request: PolicyRequest,
+    provider: Callable[[MotorPolicy.Question, PolicyRequest], ChoiceAnswer],
+) -> PolicyResult:
+    question = bind_question(policy, request)
+    outcome = (
+        question
+        if isinstance(question, NoCommand)
+        else map_answer(policy, request, question, provider(question, request))
+    )
+    return PolicyResult(request.id, sample_ids(request), outcome)

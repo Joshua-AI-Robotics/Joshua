@@ -1,0 +1,40 @@
+ai {
+  models {
+    single_models {
+      model_type: DECISIONS
+      decisions_config {
+        model: "gpt-6-luna"
+        min_confidence: 0.8
+        max_receipt_age_ms: 10000
+        deadline_ms: 5000
+        max_attempts: 1
+        policy {
+          requirements {
+            version: 1
+            evidence { name: "workpiece" kind: RGB8 }
+            evidence { name: "instruction" kind: TEXT }
+            evidence { name: "inspection" kind: JSON }
+            joints {
+              name: "indexer"
+              mode: ABSOLUTE_POSITION
+              unit: RADIANS
+              minimum: 0
+              maximum: 1
+            }
+          }
+          questions {
+            id: "index"
+            prompt: "Should the indexer advance one step, return home, or hold?"
+            inputs: "workpiece"
+            inputs: "instruction"
+            inputs: "inspection"
+            joint_name: "indexer"
+            choices { label: "advance" position_delta: 0.125 }
+            choices { label: "home" position: 0 }
+            choices { label: "hold" no_command {} }
+          }
+        }
+      }
+    }
+  }
+}

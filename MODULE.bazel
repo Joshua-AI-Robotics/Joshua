@@ -71,6 +71,20 @@ pip.parse(
 )
 use_repo(pip, "joshua_pip_smolvla")
 use_repo(pip, "joshua_pip_smolvla_312")
+pip.parse(
+    timeout = 3600,
+    hub_name = "joshua_pip_decisions",
+    python_version = "3.10",
+    requirements_lock = "//ai/models/decisions:requirements.lock",
+)
+pip.parse(
+    timeout = 3600,
+    hub_name = "joshua_pip_decisions_312",
+    python_version = "3.12",
+    requirements_lock = "//ai/models/decisions:requirements_3.12.lock",
+)
+use_repo(pip, "joshua_pip_decisions")
+use_repo(pip, "joshua_pip_decisions_312")
 
 # Custom rule for system dependencies
 system_libs = use_repo_rule("//:system_deps.bzl", "system_libs_repo")

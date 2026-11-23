@@ -462,6 +462,26 @@ absl::Status ValidateConfig(const config::Config& config) {
   ABSL_RETURN_IF_ERROR(joshua::ValidateRobotClockConfig(config.general().robot_clock()));
   if (config.ai().has_motor_policy())
     ABSL_RETURN_IF_ERROR(ValidateMotorPolicy(config.ai().motor_policy()));
+  for (const auto& model : config.ai().models().single_models()) {
+    if ((model.model_type() == ai::models::DECISIONS) != model.has_decisions_config())
+      return absl::InvalidArgumentError("DECISIONS requires a matching decisions_config");
+    if (!model.has_decisions_config()) continue;
+    const auto& settings = model.decisions_config();
+    if (settings.model() != "gpt-6-luna")
+      return absl::InvalidArgumentError("decisions_config.model must be gpt-6-luna");
+    if (!settings.has_min_confidence() || !std::isfinite(settings.min_confidence()) ||
+        settings.min_confidence() < 0 || settings.min_confidence() > 1)
+      return absl::InvalidArgumentError("decisions_config.min_confidence must be in [0,1]");
+    if (!settings.max_receipt_age_ms() || !settings.deadline_ms() || settings.max_attempts() < 1 ||
+        settings.max_attempts() > 3)
+      return absl::InvalidArgumentError(
+          "Decisions requires positive age and deadline, and 1..3 attempts");
+    ABSL_RETURN_IF_ERROR(ValidateMotorPolicy(settings.policy()));
+    for (const auto& question : settings.policy().questions()) {
+      if (question.choices_size() < 2 || question.choices_size() > 255)
+        return absl::InvalidArgumentError("A Decisions question requires 2..255 choices");
+    }
+  }
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
   for (const auto& board : robot.boards()) {
