@@ -56,3 +56,29 @@ Run the replay and configuration checks in a Docker dev shell.
 ```bash
 bazel test //ai/inference:motor_policy_test //config:validation_test
 ```
+
+## Asynchronous motor-policy sessions
+
+A session runs on one asyncio loop with one active evaluation and one replaceable
+pending request. A new trigger sample may wait while the previous result is still
+admissible. Bind each logical input to a source and sample generation at explicit
+start. Stop before changing bindings. Start returns a new request generation.
+Use a distinct run identity when creating a new session. Supply the identity of
+the validated config used to create its adapter.
+
+Stamp each sample at original host receipt with `time.monotonic_ns()`. This
+local clock bounds elapsed network wait and queue time even if RobotTime pauses
+or jumps. It measures receipt age only. Source/acquisition timestamps retain
+their own domain. Submit, stop, recording and command admission share the owning
+loop. Admitted results carry their local monotonic expiry through the sink call.
+The record and sink callbacks must be synchronous and nonblocking. An external
+source should marshal its updates onto that loop. The control owner handles ROS
+hardware binding and physical stop.
+
+The [Decisions adapter test](../models/decisions/tests/adapter_test.py) shows
+registry construction, an explicit session start, request submission and result
+recording. Run the lifecycle and adapter tests in a Docker dev shell.
+
+```bash
+bazel test //ai/inference:policy_session_test //ai/models/decisions:adapter_test
+```

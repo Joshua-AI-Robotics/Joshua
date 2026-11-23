@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <limits>
+#include <string>
 
 #include "google/protobuf/text_format.h"
 #include "gtest/gtest.h"
@@ -114,6 +115,79 @@ TEST(ValidationTest, ValidatesMotorPolicyBindingsAndLimits) {
     p.mutable_questions(0)->mutable_choices(0)->set_position_delta(
         std::numeric_limits<double>::quiet_NaN());
   });
+}
+
+TEST(ValidationTest, ValidatesDecisionsProviderAndBudgets) {
+  Config config;
+  auto* model = config.mutable_ai()->mutable_models()->add_single_models();
+  model->set_model_type(ai::models::DECISIONS);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  auto* settings = model->mutable_decisions_config();
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString(
+      R"pb(
+        model: "gpt-6-luna"
+        min_confidence: 0
+        deadline_ms: 1
+        max_receipt_age_ms: 1
+        max_attempts: 1
+        policy {
+          requirements {
+            version: 1
+            evidence { name: "part" kind: TEXT }
+            joints { name: "hinge" mode: ABSOLUTE_POSITION unit: RADIANS minimum: 0 maximum: 1 }
+          }
+          questions {
+            id: "pose"
+            prompt: "Move?"
+            inputs: "part"
+            joint_name: "hinge"
+            choices {
+              label: "hold"
+              no_command {}
+            }
+            choices { label: "move" position: 1 }
+          }
+        }
+      )pb",
+      settings));
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  settings->set_min_confidence(1);
+  settings->set_max_attempts(3);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  auto invalid = [&](auto change) {
+    Config candidate = config;
+    change(*candidate.mutable_ai()
+                ->mutable_models()
+                ->mutable_single_models(0)
+                ->mutable_decisions_config());
+    EXPECT_FALSE(ValidateConfig(candidate).ok());
+  };
+  invalid([](auto& s) { s.clear_min_confidence(); });
+  invalid([](auto& s) { s.set_min_confidence(-0.1); });
+  invalid([](auto& s) { s.set_min_confidence(1.1); });
+  invalid([](auto& s) { s.set_min_confidence(std::numeric_limits<double>::quiet_NaN()); });
+  invalid([](auto& s) { s.clear_model(); });
+  invalid([](auto& s) { s.clear_deadline_ms(); });
+  invalid([](auto& s) { s.clear_max_receipt_age_ms(); });
+  invalid([](auto& s) { s.clear_max_attempts(); });
+  invalid([](auto& s) { s.set_max_attempts(4); });
+  invalid([](auto& s) { s.clear_policy(); });
+  invalid(
+      [](auto& s) { s.mutable_policy()->mutable_questions(0)->mutable_choices()->RemoveLast(); });
+  auto* question = settings->mutable_policy()->mutable_questions(0);
+  for (int i = question->choices_size(); i < 255; ++i) {
+    auto* choice = question->add_choices();
+    choice->set_label(std::to_string(i));
+    choice->mutable_no_command();
+  }
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  invalid([](auto& s) {
+    auto* extra = s.mutable_policy()->mutable_questions(0)->add_choices();
+    extra->set_label("extra");
+    extra->mutable_no_command();
+  });
+  model->set_model_type(ai::models::RANDOM_NOISE);
+  EXPECT_FALSE(ValidateConfig(config).ok());
 }
 
 TEST(ValidationTest, ResolvesBoardWithoutOpeningHardware) {
