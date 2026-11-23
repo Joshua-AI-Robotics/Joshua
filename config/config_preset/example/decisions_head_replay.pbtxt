@@ -1,0 +1,33 @@
+ai {
+  models {
+    single_models {
+      model_type: DECISIONS
+      decisions_config {
+        model: "gpt-6-luna"
+        min_confidence: 0.8
+        max_receipt_age_ms: 5000
+        deadline_ms: 5000
+        max_attempts: 1
+        policy {
+          requirements {
+            version: 1
+            evidence { name: "frame" kind: RGB8 }
+            evidence { name: "target" kind: TEXT }
+            joints { name: "pan" mode: ABSOLUTE_POSITION unit: RADIANS minimum: -0.5 maximum: 0.5 }
+          }
+          questions {
+            id: "target_location"
+            prompt: "Locate the requested target in the image. Select target_left or target_right according to its image position, centered if it occupies the middle fifth of the image, and missing if it is absent or cannot be identified unambiguously."
+            inputs: "frame"
+            inputs: "target"
+            joint_name: "pan"
+            choices { label: "target_left" position_delta: -0.1 }
+            choices { label: "target_right" position_delta: 0.1 }
+            choices { label: "centered" no_command {} }
+            choices { label: "missing" no_command {} }
+          }
+        }
+      }
+    }
+  }
+}

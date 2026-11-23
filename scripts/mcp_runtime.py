@@ -870,7 +870,7 @@ class Runtime:
                 "MCP protocol check did not produce a passing report", "smoke_failed"
             ) from error
 
-    def serve(self, decisions=False, observation_dir=None):
+    def serve(self, decisions=False, observation_dir=None, head_replay=False):
         require_host()
         state = self.checked_state()
         if state["source"] != source_manifest(self.root):
@@ -886,19 +886,16 @@ class Runtime:
                 raise McpError("Run prepare to build the Decisions tool.")
             if not self.environ.get("OPENAI_API_KEY"):
                 raise McpError("Set OPENAI_API_KEY for the Decisions MCP server.")
+            command.append("/opt/joshua-mcp/" + DECISIONS_BINARY)
+            if head_replay:
+                command.append("--head-replay")
             if observation_dir is not None:
                 directory = observation_dir.resolve(strict=True)
                 if not directory.is_dir() or ":" in str(directory):
                     raise McpError("Invalid runtime observation directory.")
                 at = command.index(service)
                 command[at:at] = ["--volume", f"{directory}:/observations:ro"]
-                command.extend(
-                    [
-                        "/opt/joshua-mcp/" + DECISIONS_BINARY,
-                        "--observation-dir",
-                        "/observations",
-                    ]
-                )
+                command.extend(["--observation-dir", "/observations"])
         name = command[command.index("--name") + 1]
         child = None
         previous = {}
@@ -966,12 +963,19 @@ def main(argv=None):
     parser.add_argument(
         "--observation-dir", type=Path, help="Runtime snapshots for serve-decisions"
     )
+    parser.add_argument(
+        "--head-replay",
+        action="store_true",
+        help="Enable the synthetic camera-head replay",
+    )
     args = parser.parse_args(argv)
-    if args.observation_dir and args.command != "serve-decisions":
-        parser.error("--observation-dir applies to serve-decisions")
+    if (args.observation_dir or args.head_replay) and args.command != "serve-decisions":
+        parser.error("--observation-dir and --head-replay apply to serve-decisions")
     runtime = Runtime(args.root, args.stack, args.config_root)
     if args.command in ("serve", "serve-decisions"):
-        return runtime.serve(args.command == "serve-decisions", args.observation_dir)
+        return runtime.serve(
+            args.command == "serve-decisions", args.observation_dir, args.head_replay
+        )
     if args.command == "prepare":
         result = runtime.prepare(rebuild_image=args.rebuild_image)
     elif args.command == "check":

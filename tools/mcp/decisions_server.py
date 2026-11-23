@@ -30,19 +30,42 @@ def make_server(requests):
             "additionalProperties": False,
         },
         annotations=types.ToolAnnotations(
-            readOnlyHint=True,
+            readOnlyHint=requests.replay is None,
             destructiveHint=False,
             openWorldHint=True,
             idempotentHint=True,
         ),
     )
 
+    stop = types.Tool(
+        name="stop_decision",
+        description="Cancel a pending replay turn locally using its sequence.",
+        inputSchema={
+            "type": "object",
+            "properties": {"sequence": {"type": "integer", "minimum": 1}},
+            "required": ["sequence"],
+            "additionalProperties": False,
+        },
+        annotations=types.ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=False,
+            openWorldHint=False,
+            idempotentHint=True,
+        ),
+    )
+
     @app.list_tools()
     async def list_tools():
-        return [tool]
+        return [tool, stop] if requests.replay is not None else [tool]
 
     @app.call_tool()
     async def call_tool(name, arguments):
+        if name == stop.name and requests.replay is not None:
+            status = requests.stop(arguments["sequence"])
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text=status)],
+                structuredContent={"sequence": arguments["sequence"], "status": status},
+            )
         if name != tool.name:
             raise ValueError("Unknown tool.")
         report = await requests.request(**arguments)
@@ -64,9 +87,18 @@ async def serve(args):
             timeout=18,
             max_retries=0,
         ) as api:
-            app = make_server(DecisionsRequests(api, observer))
+            replay = None
+            if args.head_replay:
+                from tools.mcp.head_replay import HeadReplay
+
+                replay = HeadReplay.load()
+            requests = DecisionsRequests(api, observer, replay=replay)
+            app = make_server(requests)
             async with stdio_server() as (reader, writer):
-                await app.run(reader, writer, app.create_initialization_options())
+                try:
+                    await app.run(reader, writer, app.create_initialization_options())
+                finally:
+                    requests.bind_replay(None)
     finally:
         await observer.aclose()
 
@@ -74,4 +106,5 @@ async def serve(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--observation-dir")
+    parser.add_argument("--head-replay", action="store_true")
     asyncio.run(serve(parser.parse_args()))
