@@ -43,3 +43,16 @@ ROS2 topics ─▶ InferenceHost (rclpy Node)
 
 - `EVENT` — `on_observation` per decoded message; adapter buffers internally.
 - `TICK` — host also calls `on_tick` at `AdapterSpec.tick_hz`.
+
+## Motor-policy replay
+
+Replay checks how a [configured policy](proto/motor_policy.proto) maps a known
+answer to a joint command or a reason to send no command. The
+[rotary-gripper test fixture](testdata/rotary_gripper.pbtxt) supplies the mapping.
+The test collects commands in memory.
+
+Run the replay and configuration checks in a Docker dev shell.
+
+```bash
+bazel test //ai/inference:motor_policy_test //config:validation_test
+```

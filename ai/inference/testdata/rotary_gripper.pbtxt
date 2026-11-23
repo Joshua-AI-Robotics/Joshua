@@ -1,0 +1,36 @@
+ai {
+  motor_policy {
+    requirements {
+      version: 1
+      evidence { name: "workpiece" kind: RGB8 }
+      evidence { name: "instruction" kind: TEXT }
+      evidence { name: "inspection" kind: JSON }
+      joints {
+        name: "gripper_hinge"
+        mode: ABSOLUTE_POSITION
+        unit: RADIANS
+        minimum: 0
+        maximum: 1.0
+      }
+    }
+    questions {
+      id: "grasp"
+      prompt: "Should the rotary gripper close one step, open fully, or hold?"
+      inputs: "workpiece"
+      inputs: "instruction"
+      inputs: "inspection"
+      joint_name: "gripper_hinge"
+      choices { label: "close" position_delta: -0.125 }
+      choices { label: "open" position: 1.0 }
+      choices { label: "hold" no_command {} }
+    }
+    questions {
+      id: "park"
+      prompt: "Should the gripper return to its reference angle?"
+      inputs: "instruction"
+      joint_name: "gripper_hinge"
+      choices { label: "park" position: 0 }
+      choices { label: "hold" no_command {} }
+    }
+  }
+}

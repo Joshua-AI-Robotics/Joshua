@@ -377,12 +377,91 @@ absl::Status ValidateEthercatBoards(
   return absl::OkStatus();
 }
 
+absl::Status ValidateMotorPolicy(const ai::inference::MotorPolicy& policy) {
+  using Policy = ai::inference::MotorPolicy;
+  if (policy.requirements().version() != 1)
+    return absl::InvalidArgumentError("ai.motor_policy.requirements.version must be 1");
+  if (policy.questions().empty())
+    return absl::InvalidArgumentError("ai.motor_policy.questions must contain a question");
+
+  std::set<std::string> evidence;
+  for (const auto& input : policy.requirements().evidence()) {
+    if (input.name().empty() || !evidence.insert(input.name()).second)
+      return absl::InvalidArgumentError(
+          absl::StrCat("Missing or duplicate evidence name: ", input.name()));
+    if (!Policy::Evidence::Kind_IsValid(input.kind()) ||
+        input.kind() == Policy::Evidence::KIND_UNSPECIFIED)
+      return absl::InvalidArgumentError(
+          absl::StrCat("Unsupported evidence kind for ", input.name()));
+  }
+
+  std::map<std::string, const Policy::Joint*> joints;
+  for (const auto& joint : policy.requirements().joints()) {
+    if (joint.name().empty() || !joints.emplace(joint.name(), &joint).second)
+      return absl::InvalidArgumentError(
+          absl::StrCat("Missing or duplicate policy joint: ", joint.name()));
+    if (joint.mode() != Policy::Joint::ABSOLUTE_POSITION || joint.unit() != Policy::Joint::RADIANS)
+      return absl::InvalidArgumentError(
+          absl::StrCat("Expected absolute position in radians for ", joint.name()));
+    if (!joint.has_minimum() || !joint.has_maximum() || !std::isfinite(joint.minimum()) ||
+        !std::isfinite(joint.maximum()) || joint.minimum() >= joint.maximum())
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid policy position limits for ", joint.name()));
+  }
+
+  std::set<std::string> questions;
+  for (const auto& question : policy.questions()) {
+    if (question.id().empty() || !questions.insert(question.id()).second ||
+        question.prompt().empty())
+      return absl::InvalidArgumentError(
+          absl::StrCat("Expected unique question ID and nonempty prompt for ", question.id()));
+    auto joint = joints.find(question.joint_name());
+    if (joint == joints.end())
+      return absl::InvalidArgumentError(
+          absl::StrCat("Unknown joint for policy question ", question.id()));
+    if (question.inputs().empty() || question.choices().empty())
+      return absl::InvalidArgumentError(
+          absl::StrCat("Missing inputs or choices for ", question.id()));
+    std::set<std::string> inputs;
+    for (const auto& input : question.inputs()) {
+      if (!evidence.count(input) || !inputs.insert(input).second)
+        return absl::InvalidArgumentError(
+            absl::StrCat("Unknown or duplicate input for ", question.id(), ": ", input));
+    }
+    std::set<std::string> choices;
+    for (const auto& choice : question.choices()) {
+      if (choice.label().empty() || !choices.insert(choice.label()).second)
+        return absl::InvalidArgumentError(
+            absl::StrCat("Missing or duplicate choice for ", question.id()));
+      switch (choice.outcome_case()) {
+        case Policy::Choice::kNoCommand:
+          break;
+        case Policy::Choice::kPosition:
+          if (std::isfinite(choice.position()) && choice.position() >= joint->second->minimum() &&
+              choice.position() <= joint->second->maximum())
+            break;
+          return absl::InvalidArgumentError(
+              absl::StrCat("Position outside policy limits for ", choice.label()));
+        case Policy::Choice::kPositionDelta:
+          if (std::isfinite(choice.position_delta())) break;
+          return absl::InvalidArgumentError(
+              absl::StrCat("Nonfinite position_delta for ", choice.label()));
+        default:
+          return absl::InvalidArgumentError(absl::StrCat("Missing outcome for ", choice.label()));
+      }
+    }
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 absl::Status ValidateConfig(const config::Config& config) {
   if (!config::General::Ros2LogMode_IsValid(config.general().ros2_log_mode()))
     return absl::InvalidArgumentError("Unknown general.ros2_log_mode");
   ABSL_RETURN_IF_ERROR(joshua::ValidateRobotClockConfig(config.general().robot_clock()));
+  if (config.ai().has_motor_policy())
+    ABSL_RETURN_IF_ERROR(ValidateMotorPolicy(config.ai().motor_policy()));
   const auto& robot = config.robot();
   ABSL_RETURN_IF_ERROR(ValidateEthercatBoards(robot.boards()));
   for (const auto& board : robot.boards()) {

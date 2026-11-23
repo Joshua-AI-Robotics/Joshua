@@ -137,6 +137,10 @@ Use `make_adapter_spec()` in `types.py` to default min subs/pubs to `1`.
   adapter.close()
 ```
 
+Once the registry returns an adapter, a startup failure calls `adapter.close()`
+before destroying the ROS node. Adapters must support cleanup after partial
+initialization.
+
 Exceptions in `on_observation` / `on_tick` are logged; one bad frame does not
 crash the node.
 

@@ -4,8 +4,19 @@ load("@rules_python//python:proto.bzl", "py_proto_library")
 package(default_visibility = ["//visibility:public"])
 
 proto_library(
+    name = "motor_policy_proto",
+    srcs = ["motor_policy.proto"],
+)
+
+py_proto_library(
+    name = "motor_policy_py_proto",
+    deps = [":motor_policy_proto"],
+)
+
+proto_library(
     name = "inference_proto",
     srcs = ["inference.proto"],
+    deps = [":motor_policy_proto"],
 )
 
 proto_library(
