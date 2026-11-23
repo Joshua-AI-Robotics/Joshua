@@ -68,6 +68,21 @@ py_library(
     ] + requirement("protobuf"),
 )
 
+py_test(
+    name = "host_startup_test",
+    srcs = ["tests/host_startup_test.py"],
+    main = "tests/host_startup_test.py",
+    deps = [
+        ":adapter",
+        ":host",
+        ":types",
+        "//ai/proto:ai_model_py_proto",
+        "//config/proto:config_py_proto",
+        "//ros2/proto:ros2_data_type_py_proto",
+        "//ros2/utils:ros_python_paths_py",
+    ],
+)
+
 py_library(
     name = "host_main",
     srcs = ["host_main.py"],

@@ -13,6 +13,7 @@ implementations resolved via the registry.
 from __future__ import annotations
 
 import time
+from contextlib import ExitStack
 from typing import Any, List, NamedTuple, Optional
 
 from rclpy.node import Node
@@ -48,37 +49,41 @@ class InferenceHost(Node):
     def __init__(self, node_name: str, node_id: int, config: config_pb2.Config):
         super().__init__(node_name)
 
-        self.node_id = node_id
-        self.config = config
-        self._codec = ObservationCodec()
+        with ExitStack() as startup:
+            startup.callback(self.destroy_node)
+            self.node_id = node_id
+            self.config = config
+            self._codec = ObservationCodec()
 
-        self.single_model_config = self._select_model_config()
-        self._validate_node_config()
+            self.single_model_config = self._select_model_config()
+            self._validate_node_config()
 
-        self.adapter = registry.create_adapter(self.single_model_config, config)
-        self.adapter.validate()
-        self.adapter.initialize()
-        self._spec = self.adapter.spec()
-        self._validate_against_spec()
+            self.adapter = registry.create_adapter(self.single_model_config, config)
+            startup.callback(self.shutdown)
+            self.adapter.validate()
+            self.adapter.initialize()
+            self._spec = self.adapter.spec()
+            self._validate_against_spec()
 
-        self._pub_handles: List[_Publisher] = []
-        self._setup_publishers()
+            self._pub_handles: List[_Publisher] = []
+            self._setup_publishers()
 
-        self._channels: List[ChannelSpec] = []
-        self._setup_subscriptions()
+            self._channels: List[ChannelSpec] = []
+            self._setup_subscriptions()
 
-        self._timer = None
-        if self._spec.trigger_mode == TriggerMode.TICK:
-            self._setup_tick_timer()
+            self._timer = None
+            if self._spec.trigger_mode == TriggerMode.TICK:
+                self._setup_tick_timer()
 
-        node_cfg = self.single_model_config.node
-        self.get_logger().info(
-            f"Inference host '{node_name}' started "
-            f"(adapter={type(self.adapter).__name__}, "
-            f"mode={TriggerMode.Name(self._spec.trigger_mode)}): "
-            f"{', '.join(p.topic for p in node_cfg.publishers)} publish topics, "
-            f"{', '.join(s.topic for s in node_cfg.subscriptions)} subscribe topics."
-        )
+            cfg = self.single_model_config.node
+            self.get_logger().info(
+                f"Inference host '{node_name}' started "
+                f"(adapter={type(self.adapter).__name__}, "
+                f"mode={TriggerMode.Name(self._spec.trigger_mode)}): "
+                f"{', '.join(p.topic for p in cfg.publishers)} publish topics, "
+                f"{', '.join(s.topic for s in cfg.subscriptions)} subscribe topics."
+            )
+            startup.pop_all()
 
     def _select_model_config(self) -> ai_model_pb2.SingleModel:
         """Pick the SingleModel entry whose node id matches this node."""
