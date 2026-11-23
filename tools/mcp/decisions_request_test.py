@@ -35,6 +35,7 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
         op = request.url.path.split("/")[-1]
         self.calls.append(op)
         if op == "responses":
+            self.answer_input = body["input"]
             self.assertFalse(body["store"])
             self.assertNotIn("tools", body)
             return httpx2.Response(
@@ -159,6 +160,71 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
             (await self.requests.request("Again.", 4))["outcome"], "failed"
         )
         self.assertNotIn("responses", self.calls)
+
+    async def test_status_followup_uses_the_displayed_processes(self):
+        observed = await self.observer.get_runtime_status()
+        observed.update(
+            availability="fresh",
+            instance_id="private-instance",
+            snapshot_age_seconds=0.5,
+            data={
+                "phase": "running",
+                "processes": [
+                    {"node_name": "camera"},
+                    {"node_name": "tracker", "pid": 987654},
+                ],
+                "tracked_process_count": 2,
+            },
+        )
+        self.observer.get_runtime_status = AsyncMock(return_value=observed)
+        self.route = "status"
+        first = await self.requests.request("What is running?", 1)
+        self.route = "answer"
+        await self.requests.request("Which process did you list second?", 2)
+        history = self.parts[0]["data"]["previous_turns"]
+        self.assertIn("camera, tracker", first["reply"])
+        self.assertEqual(history[0]["reply"], first["reply"])
+        self.assertIn(
+            {"role": "assistant", "content": first["reply"]}, self.answer_input
+        )
+        sent = json.dumps([history, self.answer_input])
+        self.assertNotIn("private-instance", sent)
+        self.assertNotIn("987654", sent)
+
+    async def test_timeout_settles_before_routing_provider_drains(self):
+        entered = asyncio.Event()
+        cancelled = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow_route(request):
+            entered.set()
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                await release.wait()
+            return await self.handle(request)
+
+        async with AsyncOpenAI(
+            api_key="test",
+            max_retries=0,
+            http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(slow_route)),
+        ) as api:
+            requests = DecisionsRequests(api, self.observer, deadline=0.1)
+            task = asyncio.create_task(requests.request("What is a servo?", 1))
+            try:
+                await asyncio.wait_for(entered.wait(), 1)
+                worker = requests.active
+                await asyncio.wait_for(cancelled.wait(), 2)
+                result = await asyncio.wait_for(asyncio.shield(task), 1)
+                self.assertEqual(result["outcome"], "timeout")
+            finally:
+                release.set()
+                await task
+            await asyncio.gather(worker, return_exceptions=True)
+            self.assertEqual(self.calls, ["decisions"])
+            self.assertIsNone(result["route"])
+            self.assertEqual(await requests.request("What is a servo?", 1), result)
 
     async def test_timeout_cancellation_and_overlap(self):
         self.delay = True

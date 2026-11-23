@@ -400,7 +400,9 @@ turns and accepts one active request. A retry of the last completed sequence
 and text returns the cached result. MCP cancellation consumes that sequence.
 The 20-second local monotonic deadline bounds network wait independently of
 RobotTime. Current messages and bounded conversational history go to OpenAI.
-Raw runtime snapshots stay with the observation reader.
+Follow-ups can refer to the first 1,000 characters of a successful status reply,
+including the process names shown to the operator. Raw runtime snapshots stay
+with the observation reader.
 
 Run `./scripts/joshua_mcp.sh prepare` once after checking out this revision.
 Register a stdio server in the MCP client with the absolute path to

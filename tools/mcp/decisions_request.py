@@ -42,12 +42,18 @@ class DecisionsRequests:
             "outcome": "completed",
         }
         started = time.monotonic()
-        self.active = asyncio.create_task(self.dispatch(text, report))
+        self.active = asyncio.create_task(
+            self.dispatch(text, report, started + self.deadline)
+        )
         try:
-            report["reply"] = await asyncio.wait_for(self.active, self.deadline)
+            report["reply"] = await asyncio.wait_for(
+                asyncio.shield(self.active), self.deadline
+            )
         except (asyncio.TimeoutError, APITimeoutError):
+            self.active.cancel()
             report.update(outcome="timeout", reply="The request timed out.")
         except asyncio.CancelledError:
+            self.active.cancel()
             report.update(outcome="cancelled", reply="The request was cancelled.")
             raise
         except (APIError, ValueError, TypeError, KeyError, AttributeError):
@@ -55,17 +61,23 @@ class DecisionsRequests:
                 outcome="failed", reply="The provider returned no usable result."
             )
         finally:
+            if not self.active.done():
+                self.active.add_done_callback(
+                    lambda t: None if t.cancelled() else t.exception()
+                )
             report["elapsed_ms"] = round((time.monotonic() - started) * 1000)
             self.active = None
             self.sequence = sequence
-            self.last = text, report
+            self.last = text, dict(report)
             turn = {"message": text, "route": report["route"]}
-            if report["route"] in {"answer", "clarify", "unsupported"}:
+            if report["route"] in {"answer", "clarify", "unsupported"} or (
+                report["route"] == "status" and report["outcome"] == "completed"
+            ):
                 turn["reply"] = report.get("reply", "")[:1000]
             self.history.append(turn)
-        return report
+        return self.last[1]
 
-    async def dispatch(self, text, report):
+    async def dispatch(self, text, report, deadline):
         name = "operator_intent_" + report["turn_id"]
         routes = dict(ROUTES)
         instructions = (
@@ -91,6 +103,8 @@ class DecisionsRequests:
                 }
             ],
         )
+        if asyncio.current_task() is not self.active or time.monotonic() >= deadline:
+            raise asyncio.TimeoutError()
         decision = raw.http_response.json()
         route_info = {
             "ms": round((time.monotonic() - started) * 1000),
