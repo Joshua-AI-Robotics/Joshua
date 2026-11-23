@@ -50,6 +50,10 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("tools", body)
             self.answer_input = body["input"]
             answer = "A servo uses feedback."
+            if isinstance(body["input"], list) and isinstance(
+                body["input"][-1]["content"], list
+            ):
+                answer = "The red mug is on the right."
             if "text" in body:
                 self.calls[-1] = "binding"
                 self.assertTrue(body["text"]["format"]["strict"])
@@ -329,6 +333,10 @@ class DecisionsRequestTest(unittest.IsolatedAsyncioTestCase):
                 elif route == "head":
                     self.assertEqual(result["outcome"], "no_command")
                 if route == "scene":
+                    self.assertEqual(
+                        result["reply"],
+                        "Synthetic camera replay\n\nThe red mug is on the right.",
+                    )
                     self.assertEqual(
                         self.answer_input[-1]["content"][1]["image_url"],
                         replay.image_url,

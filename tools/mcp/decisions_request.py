@@ -245,7 +245,7 @@ class DecisionsRequests:
         if route == "scene":
             instructions += (
                 " Answer only the specific visual question using the synthetic replay "
-                "frame. Identify it as replay. Omit incidental details and speculation."
+                "frame. Omit incidental details and speculation."
             )
             messages[-1]["content"] = [
                 {"type": "input_text", "text": text},
@@ -266,4 +266,5 @@ class DecisionsRequests:
         if response.status != "completed" or not response.output_text.strip():
             report["outcome"] = "unanswered"
             return "The answer provider could not complete this reply."
-        return response.output_text.strip()
+        reply = response.output_text.strip()
+        return "Synthetic camera replay\n\n" + reply if route == "scene" else reply
