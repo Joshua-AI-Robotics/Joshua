@@ -29,8 +29,11 @@ async def run_turns(client):
         )
         report = result.structuredContent or {}
         actual_command = report.get("replay_command")
+        reported_reply = report.get("reply")
         matched = {
-            "sequence": report.get("sequence") == sequence,
+            "sequence": type(report.get("sequence")) is int
+            and report["sequence"] == sequence,
+            "reply": isinstance(reported_reply, str) and bool(reported_reply.strip()),
             "route": report.get("route") == route,
             "outcome": report.get("outcome") in outcomes,
             "command": (
@@ -40,13 +43,16 @@ async def run_turns(client):
             ),
         }
         if report.get("outcome") == "no_command" and route == "head":
-            matched["missing_target"] = (report.get("motor") or {}).get(
-                "choice"
-            ) == "missing"
-        reply = report.get("reply") or "\n".join(
-            item.text for item in result.content if item.type == "text"
+            motor = report.get("motor")
+            matched["missing_target"] = isinstance(motor, dict) and (
+                motor.get("choice") == "missing"
+            )
+        reply = (
+            reported_reply
+            if matched["reply"]
+            else "\n".join(item.text for item in result.content if item.type == "text")
         )
-        ok = not result.isError and bool(report.get("reply")) and all(matched.values())
+        ok = not result.isError and all(matched.values())
         record(
             "result",
             sequence=sequence,
@@ -63,7 +69,7 @@ async def run_turns(client):
         elif (
             isinstance(actual_command, dict)
             and actual_command.get("joint") == "pan"
-            and type(actual_command.get("radians")) in (int, float)
+            and type(actual_command.get("radians")) is float
         ):
             target = f"pan {actual_command['radians']:+.3f} rad"
         else:
