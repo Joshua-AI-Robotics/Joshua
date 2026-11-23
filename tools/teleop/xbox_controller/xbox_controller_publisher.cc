@@ -7,9 +7,9 @@
 #include "ros2/logging.h"
 #include "ros2/utils/robot_timer.h"
 #include "std_msgs/msg/float32_multi_array.hpp"
+#include "tools/teleop/xbox_controller/xbox_controller.h"
 #include "utils/joshua_runtime.h"
 #include "utils/scope_exit.h"
-#include "utils/xbox_controller/xbox_controller.h"
 
 class XboxControllerPublisher : public rclcpp::Node {
  public:

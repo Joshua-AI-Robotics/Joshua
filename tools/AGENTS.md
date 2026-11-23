@@ -29,6 +29,11 @@ launcher and ROS 2 nodes never invoke these.
 
 ## Contents
 
+- [`teleop/xbox_controller/`](teleop/xbox_controller/README.md) — standalone
+  Xbox input library and ROS publisher. Controller input tools live here;
+  top-level `utils/` is reserved for shared Joshua software and system utilities.
+  The launcher and production nodes do not depend on this package.
+
 - [hardware_catalog.py](hardware_catalog.py) — shared hardware record validation,
   one device file, embedded validation history, integrity checks and bounded queries. The [catalog contract](../docs/hardware_catalog/AGENTS.md) owns its
   templates and contribution workflow; MCP is a consumer of this tool.
@@ -92,3 +97,4 @@ launcher and ROS 2 nodes never invoke these.
 ## Directory navigation
 
 - [mcp/](mcp/AGENTS.md)
+- [Xbox controller development contract](teleop/xbox_controller/AGENTS.md)

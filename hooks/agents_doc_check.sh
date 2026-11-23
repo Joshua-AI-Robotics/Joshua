@@ -123,28 +123,6 @@ for f in "${FILES[@]}"; do
            sed -E 's/^[[:space:]]*@//')
 done
 
-# Gemini reads AGENTS.md only because .gemini/settings.json says to. The key
-# moved from a flat `contextFileName` to a nested `context.fileName` in the
-# 2025-09-17 settings migration, and a stale key fails silently — Gemini just
-# falls back to GEMINI.md. Check the shape so that cannot recur unnoticed.
-GEMINI_SETTINGS=".gemini/settings.json"
-if [[ ! -f "$GEMINI_SETTINGS" ]]; then
-  echo "MISSING: $GEMINI_SETTINGS — Gemini would not read AGENTS.md" >&2
-  status=1
-elif command -v python3 >/dev/null 2>&1; then
-  if ! python3 -c '
-import json, sys
-with open(".gemini/settings.json") as fh:
-    names = json.load(fh).get("context", {}).get("fileName", [])
-sys.exit(0 if "AGENTS.md" in ([names] if isinstance(names, str) else names) else 1)
-' 2>/dev/null; then
-    echo "BAD CONFIG: $GEMINI_SETTINGS does not set context.fileName to include AGENTS.md" >&2
-    echo '  Expected: {"context": {"fileName": ["AGENTS.md"]}}' >&2
-    echo "  A flat \"contextFileName\" key is the pre-migration spelling and is ignored." >&2
-    status=1
-  fi
-fi
-
 if [[ $status -eq 0 ]]; then
   echo "agent docs OK: instruction links and routing targets resolve"
 else

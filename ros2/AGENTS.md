@@ -141,9 +141,8 @@ cancelled. Serial commands use steady elapsed deadlines; a hung device can
 require the launcher's bounded SIGTERM/SIGKILL escalation. Teardown
 is an attempt, not an acknowledgement that a device physically stopped.
 
-Standalone Xbox publishing accepts an optional preset path before ROS options;
-without it `JoshuaInit()` uses protobuf clock defaults, including the documented
-startup fallback. No Python RobotTime implementation is introduced. See
+Standalone Xbox input publishing lives under
+[tools/teleop/xbox_controller/](../tools/teleop/xbox_controller/AGENTS.md). See
 [`NodeManager`](../launcher/node_manager/AGENTS.md) for process ownership and
 readiness limitations.
 
@@ -243,7 +242,7 @@ The companion `<topic>/health` String reports usable, invalid/stale, or the sour
 error. Record both topics; decoding uses `perception_packet.proto`. Receipt
 freshness does not establish absolute device acquisition age.
 
-Position, camera, lidar, audio and Xbox publisher callbacks use
+Position, camera, lidar and audio publisher callbacks use
 `utils/robot_timer.h` with double-second RobotTime deadlines. The executor polls
 those deadlines; a paused RobotTime pauses publication. Missed periods are
 skipped, and camera/lidar callbacks only read their own configured stream. See

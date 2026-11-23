@@ -7,8 +7,6 @@ bazel-testlogs
 .venv-cuda-smoke
 venv
 ENV
-node_modules
-ui/node_modules
 dist
 output
 .cache

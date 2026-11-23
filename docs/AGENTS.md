@@ -34,10 +34,10 @@ contradict a parent contract. Read applicable files even when an agent starts
 at the repository root.
 
 Keep all directory context in `AGENTS.md`. Tool-specific settings or existing
-pointers may route to it but must not define separate engineering rules. Keep
-the root Gemini context configuration pointed at `AGENTS.md`. Link new files
-from the nearest ancestor's directory navigation and the architecture map when
-adding a new ownership boundary. Avoid duplicate context across those files.
+pointers may route to it but must not define separate engineering rules. Root
+`GEMINI.md` routes to `AGENTS.md`; repository-local Gemini settings are not
+provided. Link new files from the nearest ancestor's directory navigation and
+the architecture map when adding a new ownership boundary. Avoid duplicate context across those files.
 
 ## Verification
 
@@ -73,7 +73,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Setup scripts and builds | [scripts/AGENTS.md](../scripts/AGENTS.md) |
 | Simulation (MuJoCo, Isaac Sim) | [simulation/AGENTS.md](../simulation/AGENTS.md) |
 | Data collection (DataStore) | [ai/train/AGENTS.md](../ai/train/AGENTS.md) |
-| React web UI | [ui/README.md](../ui/README.md) |
+| Standalone Xbox controller input and ROS interface | [Xbox controller README](../tools/teleop/xbox_controller/README.md) |
 
 ## Temporary demo plans — planned for removal
 

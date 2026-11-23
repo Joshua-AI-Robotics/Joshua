@@ -1,6 +1,6 @@
 # Architecture
 
-Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode; the launcher builds and runs the matching ROS 2 nodes. Monitoring and control are available through the React web control panel.
+Joshua is a config-driven robotics stack: one protobuf text config defines hardware, AI policy, and operation mode; the launcher builds and runs the matching ROS 2 nodes.
 
 ![Project Joshua core concept](../assets/images/joshua_summary.png)
 
@@ -28,6 +28,7 @@ initialization, or lifecycle rules. Shared design principles live in
 | Simulators and backend environments | [simulation/AGENTS.md](../simulation/AGENTS.md) |
 | Firmware adapters and portable protocol code | [firmware/AGENTS.md](../firmware/AGENTS.md) |
 | Developer tools and recording | [tools/AGENTS.md](../tools/AGENTS.md) |
+| Standalone Xbox controller input | [tools/teleop/xbox_controller/AGENTS.md](../tools/teleop/xbox_controller/AGENTS.md) |
 | Read-only MCP adapters and observation boundaries | [tools/mcp/AGENTS.md](../tools/mcp/AGENTS.md) |
 | Container tasks, setup, and artifact preparation | [scripts/AGENTS.md](../scripts/AGENTS.md) |
 | Hardware catalog data, validation specifications and evidence | [docs/hardware_catalog/AGENTS.md](hardware_catalog/AGENTS.md) |
@@ -104,6 +105,8 @@ The normative topology and qualification rules live in
 
 ## Related documentation
 
+- [Xbox controller tool](../tools/teleop/xbox_controller/AGENTS.md) — standalone
+  operator input, device ownership, ROS payload, and build/run commands
 - [Getting started](GETTING_STARTED.md) — install and first run
 - [ai/AGENTS.md](../ai/AGENTS.md) — inference engine, model plug-ins, per-model venvs
 - [ai/train/AGENTS.md](../ai/train/AGENTS.md) — data collection (DataStore)

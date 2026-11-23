@@ -361,21 +361,6 @@ services:
       - --@rules_python//python/config_settings:python_version=3.12
     profiles: [tasks]
 
-  joshua-ui:
-    build:
-      context: .
-      dockerfile: ui/Dockerfile
-    container_name: joshua-ui
-    ports:
-      - "3000:80"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      - ZENOH_BRIDGE_URL=${ZENOH_BRIDGE_URL:-http://host.docker.internal:8000}
-    restart: unless-stopped
-    profiles:
-      - production  # Use profile to avoid conflicts with joshua-ui-dev
-
 volumes:
   bazel-cache-u22:
   bazel-cache-u24:

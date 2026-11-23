@@ -37,7 +37,6 @@
 #
 # Enforced per-PR by hooks/codeowners_check.sh.
 # ---------------------------------------------------------------------------
-/.gemini/                  @hsmoon5458
 /.github/                  @hsmoon5458
 /ai/                       @hsmoon5458
 /assets/                   @hsmoon5458
@@ -55,7 +54,6 @@
 /simulation/               @hsmoon5458
 /third_party/              @hsmoon5458
 /tools/                    @hsmoon5458
-/ui/                       @donegjookim @hsmoon5458
 /utils/                    @hsmoon5458
 
 # ---------------------------------------------------------------------------

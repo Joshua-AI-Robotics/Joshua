@@ -62,22 +62,6 @@ cc_test(
 )
 
 ros2_cpp_binary(
-    name = "xbox_controller_publisher",
-    srcs = ["xbox_controller_publisher.cc"],
-    deps = [
-        ":robot_timer",
-        "//config:config_utils",
-        "//config:validation",
-        "//ros2:logging",
-        "//utils:joshua_runtime",
-        "//utils:scope_exit",
-        "//utils:xbox_controller",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-ros2_cpp_binary(
     name = "camera_subscriber",
     srcs = ["camera_subscriber.cc"],
     deps = [
