@@ -28,6 +28,7 @@ def _workspace_candidates() -> list[Path]:
                 runfiles_path,
             ]
         )
+    candidates.append(Path(__file__).absolute().parents[2])
     candidates.append(Path(__file__).resolve().parents[2])
     return candidates
 

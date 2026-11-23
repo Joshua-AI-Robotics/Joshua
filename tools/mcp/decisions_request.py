@@ -16,7 +16,7 @@ ROUTES = {
 
 
 class DecisionsRequests:
-    def __init__(self, api, observer, deadline=20):
+    def __init__(self, api, observer, deadline=20, replay=None):
         self.api = api
         self.observer = observer
         self.deadline = deadline
@@ -24,6 +24,28 @@ class DecisionsRequests:
         self.sequence = 0
         self.last = None
         self.active = None
+        self.replay = replay
+        self.stopped_through = 0
+        self.pending = None
+
+    def stop(self, sequence):
+        if type(sequence) is not int or sequence < 1:
+            raise ValueError("Use a positive integer sequence.")
+        if sequence == self.sequence:
+            return "completed"
+        if sequence != self.sequence + 1:
+            raise ValueError("Unknown turn.")
+        if self.pending and "replay_command" in self.pending:
+            return "completed"
+        self.stopped_through = sequence
+        if self.active:
+            self.active.cancel()
+        return "stopped"
+
+    def bind_replay(self, replay):
+        if self.active:
+            self.stop(self.sequence + 1)
+        self.replay = replay
 
     async def request(self, text, sequence):
         if type(text) is not str or not 0 < len(text.strip()) <= 2000:
@@ -42,29 +64,55 @@ class DecisionsRequests:
             "outcome": "completed",
         }
         started = time.monotonic()
-        self.active = asyncio.create_task(
-            self.dispatch(text, report, started + self.deadline)
-        )
+        replay = self.replay
+        deadline = started + self.deadline
+
+        def admissible():
+            return (
+                self.pending is report
+                and self.replay is replay
+                and sequence > self.stopped_through
+                and time.monotonic() < deadline
+            )
+
+        self.pending = report
         try:
+            if sequence <= self.stopped_through:
+                raise asyncio.CancelledError()
+            self.active = asyncio.create_task(
+                self.dispatch(text, report, replay, admissible)
+            )
             report["reply"] = await asyncio.wait_for(
                 asyncio.shield(self.active), self.deadline
             )
+            if not admissible() and "replay_command" not in report:
+                raise asyncio.CancelledError()
         except (asyncio.TimeoutError, APITimeoutError):
-            self.active.cancel()
+            self.stop(sequence)
             report.update(outcome="timeout", reply="The request timed out.")
         except asyncio.CancelledError:
-            self.active.cancel()
+            stopped = sequence <= self.stopped_through
+            self.stop(sequence)
             report.update(outcome="cancelled", reply="The request was cancelled.")
-            raise
+            if not stopped:
+                raise
         except (APIError, ValueError, TypeError, KeyError, AttributeError):
             report.update(
                 outcome="failed", reply="The provider returned no usable result."
             )
         finally:
-            if not self.active.done():
+            if "replay_command" in report:
+                cmd = report["replay_command"]
+                report.update(
+                    outcome="completed",
+                    reply=f"Replay recorded one {cmd['joint']} target at "
+                    f"{cmd['radians']:+.3f} rad. No hardware moved.",
+                )
+            if self.active and not self.active.done():
                 self.active.add_done_callback(
                     lambda t: None if t.cancelled() else t.exception()
                 )
+            self.pending = None
             report["elapsed_ms"] = round((time.monotonic() - started) * 1000)
             self.active = None
             self.sequence = sequence
@@ -77,13 +125,29 @@ class DecisionsRequests:
             self.history.append(turn)
         return self.last[1]
 
-    async def dispatch(self, text, report, deadline):
+    async def dispatch(self, text, report, replay, admissible):
         name = "operator_intent_" + report["turn_id"]
         routes = dict(ROUTES)
         instructions = (
             "Which capability best handles the current operator message? "
             "Use history only to resolve a reference. Choose among the listed options."
         )
+        target = None
+        if replay is not None:
+            routes["scene"] = (
+                "Describe, locate or count objects seen in the camera image."
+            )
+            offer_head, target = replay.motion_target(text)
+            if offer_head:
+                routes["head"] = (
+                    "Point the robot camera at the object named by the user."
+                )
+            instructions += (
+                " The robot has a camera and a movable head. A request to look at a "
+                "named object asks for a head turn. A question about what or where "
+                "something is asks for a visual answer. An unnamed motion target "
+                "needs clarification. Grasping is unavailable."
+            )
         parts = [
             {"type": "input_json", "data": {"previous_turns": list(self.history)}},
             {"type": "input_text", "text": text},
@@ -103,8 +167,8 @@ class DecisionsRequests:
                 }
             ],
         )
-        if asyncio.current_task() is not self.active or time.monotonic() >= deadline:
-            raise asyncio.TimeoutError()
+        if not admissible():
+            raise asyncio.CancelledError()
         decision = raw.http_response.json()
         route_info = {
             "ms": round((time.monotonic() - started) * 1000),
@@ -131,6 +195,16 @@ class DecisionsRequests:
             return "What would you like Joshua to do, and which target do you mean?"
         if route == "unsupported":
             return "That capability is unavailable in this Joshua session."
+        if route == "head":
+            if target is None:
+                target = await replay.extract_target(text, report, self.api)
+            if not admissible():
+                raise asyncio.CancelledError()
+            if target is None:
+                report["outcome"] = "unbound_target"
+                return "Which object should the replay head turn toward?"
+            report["config_id"] = replay.config_id
+            return await replay.step(target, report, self.api, admissible)
         if route == "status":
             observed = await self.observer.get_runtime_status()
             report["observation"] = {
@@ -163,13 +237,20 @@ class DecisionsRequests:
             if turn.get("reply"):
                 messages.append({"role": "assistant", "content": turn["reply"]})
         messages.append({"role": "user", "content": text})
+        instructions = (
+            "Answer the current question. Joshua supports these routes: "
+            + ", ".join(routes)
+            + ". You have no tools or observations of current robot state."
+        )
+        if route == "scene":
+            instructions += " Describe the image and identify it as a synthetic replay."
+            messages[-1]["content"] = [
+                {"type": "input_text", "text": text},
+                {"type": "input_image", "image_url": replay.image_url},
+            ]
         response = await self.api.responses.create(
             model="gpt-4.1-mini-2025-04-14",
-            instructions=(
-                "Answer the current question. Joshua supports these routes: "
-                + ", ".join(routes)
-                + ". You have no tools or observations of current robot state."
-            ),
+            instructions=instructions,
             input=messages,
             store=False,
             max_output_tokens=384,

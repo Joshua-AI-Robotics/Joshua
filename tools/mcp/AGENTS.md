@@ -415,3 +415,24 @@ unavailable status. The inspection entry point is documented under
 [local preparation and launch](#local-preparation-and-launch).
 
 In a Docker dev shell, run `bazel test //tools/mcp:decisions_request_test`.
+
+### Camera-head replay
+
+Add `--head-replay` to the `serve-decisions` arguments to offer a synthetic
+camera and one in-memory pan step per explicit motion turn. This mode reads
+the [replay preset](../../config/config_preset/example/decisions_head_replay.pbtxt)
+through the config validator. The Decisions motor adapter receives a fixed RGB
+image (blue mug on the left, red mug on the right), a target named in the
+current request and a zero-radian encoder sample. The replay sink keeps the
+last 64 accepted commands. It has no device endpoint or ROS command publisher.
+
+“Look at the red mug” can record one bounded positive pan target. “Tell me
+where the mug is, don't move” can send the same image to Responses for a
+visual answer. Both Decisions calls require 0.80 confidence. A less familiar
+motion phrasing can use a structured Responses call to bind a target to a
+literal span of the operator's request. The tool result includes separate
+routing, binding, visual-answer and motor timing/usage when each call occurs.
+
+During a pending turn call `stop_decision(sequence)` to invalidate it locally.
+The sink rechecks the turn, config and deadline at admission. A receipt reports
+a recorded target and the replay image remains fixed across requests.

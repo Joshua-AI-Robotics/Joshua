@@ -1,3 +1,4 @@
+load("//:requirements.bzl", "requirement")
 load(":requirements.bzl", "mcp_requirement")
 load("//ai/models:requirements.bzl", "model_requirement")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
@@ -113,6 +114,7 @@ py_binary(
     deps = [
         ":config_validation_lib",
         ":decisions_request",
+        ":head_replay",
     ] + model_requirement("decisions", "openai") + mcp_requirement("mcp"),
 )
 
@@ -122,5 +124,24 @@ py_test(
     deps = [
         ":decisions_request",
         ":decisions_server",
-    ] + mcp_requirement("mcp") + model_requirement("decisions", "httpx2") + model_requirement("decisions", "openai"),
+        ":head_replay",
+        "//ai/inference:manifest",
+    ] + requirement("pillow") + mcp_requirement("mcp") + model_requirement("decisions", "httpx2") + model_requirement("decisions", "openai"),
+)
+
+py_library(
+    name = "head_replay",
+    srcs = ["head_replay.py"],
+    data = [
+        "//ai/models/decisions:model.textproto",
+        "//config:joshua_validate_config",
+        "//config/config_preset:config_presets",
+    ],
+    deps = [
+        "//ai/inference:manifest",
+        "//ai/inference:motor_policy",
+        "//ai/models:registry",
+        "//ai/models/decisions:adapter",
+        "//config/proto:config_py_proto",
+    ] + requirement("pillow") + requirement("protobuf"),
 )
