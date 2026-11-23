@@ -56,6 +56,7 @@ evidence workflow and the outstanding physical qualification gates.
 | Install, Docker, first run, presets | [GETTING_STARTED.md](GETTING_STARTED.md) |
 | Local MCP setup, AI IDE connection and recovery | [MCP_SETUP.md](MCP_SETUP.md) |
 | System architecture, protobuf config, and data flow | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Proposed `request_decision` entry, replaceable inference policies, bounded execution and MCP inputs/outputs | [Pluggable inference and MCP design](designs/PLUGGABLE_INFERENCE_AND_MCP.md) |
 | ROS 2 code generation and single-source node implementation rules | [../ros2/AGENTS.md](../ros2/AGENTS.md) |
 | Global coding and contribution rules | [Root AGENTS.md](../AGENTS.md#coding-guidelines) |
 | Typed observation metadata and reader contract | [MCP AGENTS.md](../tools/mcp/AGENTS.md#typed-observation-contract) |
