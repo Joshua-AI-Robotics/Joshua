@@ -242,6 +242,47 @@ TEST_F(NodeManagerTest, ConfiguredStartupFailureAutomaticallyRollsBackEveryStart
   EXPECT_FALSE(states[1].expected_exit);
 }
 
+TEST_F(NodeManagerTest, BoardPubSubResolvesItsExecutableAndNodeName) {
+  char pattern[] = "/tmp/joshua-board-pubsub-names-XXXXXX";
+  const auto* directory = mkdtemp(pattern);
+  ASSERT_NE(directory, nullptr);
+  const std::filesystem::path root(directory);
+  joshua::ScopeExit remove_directory([&] { std::filesystem::remove_all(root); });
+  const char* previous_runfiles = std::getenv("RUNFILES_DIR");
+  const bool had_runfiles = previous_runfiles != nullptr;
+  const std::string saved_runfiles = previous_runfiles ? previous_runfiles : "";
+  joshua::ScopeExit restore_runfiles([&] {
+    if (had_runfiles)
+      setenv("RUNFILES_DIR", saved_runfiles.c_str(), 1);
+    else
+      unsetenv("RUNFILES_DIR");
+  });
+  const auto ros2 = root / "_main" / "ros2";
+  std::filesystem::create_directories(ros2);
+  // Resolve only the readiness fixture, never a production hardware executable.
+  std::filesystem::create_symlink(fixture_, ros2 / "ros2_node_wrapper.sh");
+  std::filesystem::create_symlink(fixture_, ros2 / "board_pubsub");
+  ASSERT_EQ(setenv("RUNFILES_DIR", directory, 1), 0);
+  const auto config_path = root / "config.pbtxt";
+  {
+    std::ofstream file(config_path);
+    // Resource-free entries exercise configured node dispatch without hardware setup.
+    file << R"pb(ai {
+                   data_stores { single_data_stores { node { id: 1 node_type: BOARD_PUBSUB } } }
+                 })pb";
+    ASSERT_TRUE(file.good());
+  }
+  NodeManager manager(config_path.string());
+  ASSERT_TRUE(manager.Initialize().ok());
+  ASSERT_TRUE(manager.LaunchAllNodes().ok());
+  const auto states = manager.GetNodeStatus();
+  ASSERT_EQ(states.size(), 1);
+  EXPECT_EQ(states[0].node_type, "board_pubsub");
+  EXPECT_EQ(states[0].name, "board_pubsub_1");
+  for (const auto& state : states) EXPECT_TRUE(state.ready);
+  EXPECT_TRUE(manager.Shutdown(FastShutdown()).ok());
+}
+
 TEST_F(NodeManagerTest, ShutdownReportsCleanupFailureAndReapsEveryJob) {
   NodeManager manager;
   ASSERT_TRUE(manager.StartProcess(Spec("ready")).ok());

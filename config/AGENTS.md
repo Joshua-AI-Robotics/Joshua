@@ -119,7 +119,7 @@ metadata. Neither query establishes readiness or changes config validation.
 ## Layout
 
 The mixed Teensy [scalar preset](config_preset/example/teensy_mixed_scalar.pbtxt)
-uses `FRAME_STREAM` and one `MCU_BUS` process for actuator and scalar consumers.
+uses `FRAME_STREAM` and one `BOARD_PUBSUB` process for actuator and scalar consumers.
 `joshua_wire_scalar_config` selects `board_name`, intrinsic `function_id` and
 `period_us`; it does not declare an actuator channel. The firmware catalog must
 advertise that exact sensor/schema and period support. Subscriptions require an
@@ -382,14 +382,11 @@ it never falls back to another camera. An omitted or empty path preserves
 numeric-index behavior. Cameras with identical USB identities need
 `/dev/v4l/by-path/` links and fixed USB ports instead. Keep actual identifiers
 in private runtime presets rather than committed examples.
-Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters,
-such as `MJPG` or `YUYV`. Config validation checks this before any nodes launch;
-the camera must support the selected format.
+Camera pixel format (`opencv_config.fourcc`) must contain exactly four characters
+supported by the camera, such as `MJPG` or `YUYV`.
 
-One serial bus must belong to one node process. Position sensors use
-`POSITION_PUBLISHER`; `ACTUATOR_SUBSCRIBER` only executes action commands and
-does not read or publish sensors. Reading sensors from an actuator's bus in a
-separate process is not supported by the current bus ownership model.
+Use standalone `POSITION_PUBLISHER` and `ACTUATOR_SUBSCRIBER` for independent
+buses. For a shared bus, follow the [board configuration](#shared-board-runtime).
 The `teleoperate` preset reads a separate `leader_bus` on `/dev/ttyACM1`, while
 the follower actuators use `/dev/ttyACM0`. Its leader publishers and follower
 subscribers share `sts3215_servo_<joint>/position` topics, carrying native
@@ -419,9 +416,10 @@ checks and dependency extraction are separate private helpers in that module.
 Adding a driver updates those helpers; the shared resource checks
 remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
-There is no central sensor-to-publisher allowlist; node validation checks that
-node types are specified and each node ID has one consistent type.
-
+For sensors with outputs, match `IMAGE`, `RANGE_SCAN`, `POSITION`, and `AUDIO`
+to `CAMERA_PUBLISHER`, `LIDAR_PUBLISHER`, `POSITION_PUBLISHER`, and
+`AUDIO_PUBLISHER`, respectively. `BOARD_PUBSUB` accepts board-backed `POSITION`
+and `SCALAR` and is the only node for scalar output. Each node ID has one type.
 
 Position publishers and actuator subscribers select compiled ROS message types
 using the existing `ros2_data_type` field. No field mappings are required.
@@ -469,6 +467,33 @@ effective policy, including defaults. Polling fairness requires enough deadline
 slack; admission and deadlines report overload instead of promising an infeasible
 workload. Physical control/stop latency and telemetry capacity still require P6
 qualification. Runtime board/perception integration follows in P5.
+
+## Shared board runtime
+
+Assign actuator and sensor entries sharing a bus the same node ID and
+`node_type: BOARD_PUBSUB`. Board-backed steppers require `require_explicit_enable: true`
+in this node.
+
+Migrate all `MCU_BUS`, `DEVICE_BUS`, or `BOARD_NODE` entries on the bus together, preserving
+the shared ID, board references and topics. Replace the old executables with
+`ros2/board_pubsub`. Update private service paths to use `board_pubsub_<id>` in
+place of `mcu_bus_node_<id>`, `device_bus_node_<id>`, or `board_node_<id>`. The protobuf value
+for `BOARD_PUBSUB` is 9.
+
+## Control policy
+
+Set `actuator.control_policy.initial_source` to a subscription's `source_id`
+(default `default`). Source IDs are lowercase ROS identifiers up to 64 characters.
+`command_timeout_ms` defaults to 1000. Optional `max_input_age_ms` requires
+JointState motion stamped in the receiver's ROS clock domain. Both intervals
+must be positive when set. See the [actuator lifecycle](../ros2/AGENTS.md#shared-control-lifecycle).
+
+## Observation metadata and packet output
+
+`observation_policy.stale_after_ms` sets the receipt freshness limit (default
+1000 ms). Set `frame_id` when the calibrated frame is known. For atomic
+recording, select `observation_packet: true` with `UINT8_MULTI_ARRAY` on
+supported publishers. See [observation outputs and timestamps](../ros2/AGENTS.md#sample-identity-clocks-and-recording).
 
 ## C++ ROS logging
 

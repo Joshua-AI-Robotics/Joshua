@@ -60,7 +60,7 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   b->mutable_joshua_wire_host_policy()->set_telemetry_bytes_per_second(10000);
   auto* s = c.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
   s->set_sensor_type(robot::perception::SCALAR);
-  s->mutable_node()->set_node_type(ros2::node::MCU_BUS);
+  s->mutable_node()->set_node_type(ros2::node::BOARD_PUBSUB);
   auto* scalar = s->mutable_joshua_wire_scalar_config();
   scalar->set_board_name("bus");
   scalar->set_function_id(128);
@@ -71,7 +71,7 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   p->set_publish_rate_hz(50);
   auto* a = c.mutable_robot()->mutable_actions()->add_single_actions();
   a->mutable_node()->set_id(1);
-  a->mutable_node()->set_node_type(ros2::node::MCU_BUS);
+  a->mutable_node()->set_node_type(ros2::node::BOARD_PUBSUB);
   a->set_action_type(robot::action::ACTUATOR);
   a->mutable_actuator()->set_board_name("bus");
   a->mutable_actuator()->set_channel(1);
@@ -86,6 +86,30 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   b->mutable_firmware()->set_communication_watchdog_us(1000000);
   a->mutable_actuator()->mutable_stepper_config()->set_require_explicit_enable(false);
   EXPECT_FALSE(ValidateConfig(c).ok());
+}
+
+TEST(ValidationTest, BoardPubSubUsesNineAndRejectsRemovedBusNames) {
+  for (const auto* name : {"MCU_BUS", "DEVICE_BUS", "BOARD_NODE"}) {
+    ros2::node::NodeType type;
+    EXPECT_FALSE(ros2::node::NodeType_Parse(name, &type)) << name;
+  }
+  auto board_config = MakeConfig();
+  auto* node = board_config.mutable_robot()
+                   ->mutable_perceptions()
+                   ->mutable_single_perceptions(0)
+                   ->mutable_node();
+  ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString("id: 1 node_type: 9", node));
+  EXPECT_EQ(node->node_type(), ros2::node::BOARD_PUBSUB);
+  EXPECT_TRUE(ValidateConfig(board_config).ok());
+  for (const auto value : {10, 11}) {
+    auto config = MakeConfig();
+    config.mutable_robot()
+        ->mutable_perceptions()
+        ->mutable_single_perceptions(0)
+        ->mutable_node()
+        ->set_node_type(static_cast<ros2::node::NodeType>(value));
+    EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument) << value;
+  }
 }
 
 TEST(ValidationTest, ValidatesRobotClockWithoutOpeningDevice) {
@@ -205,13 +229,34 @@ TEST(ValidationTest, ActuatorAndFeedbackMustShareOneProcess) {
   node->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
   EXPECT_TRUE(ValidateConfig(config).ok());
 }
-TEST(ValidationTest, DoesNotMaintainASensorToPublisherAllowlist) {
+TEST(ValidationTest, ResourceOnlySensorWithoutOutputsDoesNotRequirePublisherCapability) {
   auto config = MakeConfig();
   auto& robot = *config.mutable_robot();
   robot.mutable_perceptions()->mutable_single_perceptions(0)->mutable_node()->set_node_type(
       ros2::node::CAMERA_PUBLISHER);
-  // Publisher capabilities are not a shared resource-validation concern.
+  // No outputs are requested; retain resource-only validation for this entry.
   EXPECT_TRUE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, RejectsOutputsThatTheSelectedComponentNodeCannotPublish) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  auto* output = sensor->mutable_node()->add_publishers();
+  output->set_topic("joint/position");
+  output->set_ros2_data_type(ros2::data_type::FLOAT32);
+  output->set_publish_rate_hz(30);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  sensor->mutable_node()->set_node_type(ros2::node::BOARD_PUBSUB);
+  EXPECT_TRUE(ValidateConfig(config).ok());
+  for (const auto type : {ros2::node::CAMERA_PUBLISHER,
+                          ros2::node::LIDAR_PUBLISHER,
+                          ros2::node::ACTUATOR_SUBSCRIBER}) {
+    sensor->mutable_node()->set_node_type(type);
+    auto status = ValidateConfig(config);
+    EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
+    EXPECT_NE(status.message().find("Sensor 'joint'"), absl::string_view::npos);
+    EXPECT_NE(status.message().find("node.node_type"), absl::string_view::npos);
+  }
 }
 TEST(ValidationTest, RejectsUnspecifiedNodeType) {
   auto config = MakeConfig();
@@ -227,6 +272,54 @@ TEST(ValidationTest, RejectsConflictingNodeTypesForOneProcess) {
   *robot.mutable_perceptions()->add_single_perceptions() = sensor;
   EXPECT_EQ(ValidateConfig(config).code(), absl::StatusCode::kInvalidArgument);
 }
+TEST(ValidationTest, ValidatesControlPolicyAndCommandSourceIdentity) {
+  auto config = MakeConfig();
+  config.mutable_robot()->clear_perceptions();
+  auto* a = config.mutable_robot()->mutable_actions()->add_single_actions();
+  a->set_action_type(robot::action::ACTUATOR);
+  a->mutable_actuator()->set_board_name("bus");
+  a->mutable_actuator()->set_channel(1);
+  a->mutable_actuator()->set_actuator_name("joint");
+  a->mutable_actuator()->set_motor_type(robot::action::MOTOR_STS3215);
+  a->mutable_node()->set_node_type(ros2::node::ACTUATOR_SUBSCRIBER);
+  auto* sub = a->mutable_node()->add_subscriptions();
+  sub->set_topic("/joint/position");
+  sub->set_ros2_data_type(ros2::data_type::FLOAT32);
+  auto* policy = a->mutable_actuator()->mutable_control_policy();
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  policy->set_command_timeout_ms(0);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  policy->set_command_timeout_ms(100);
+  policy->set_max_input_age_ms(10);
+  EXPECT_FALSE(ValidateConfig(config).ok());  // Numeric input has no acquisition stamp.
+  sub->set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  ASSERT_TRUE(ValidateConfig(config).ok()) << ValidateConfig(config);
+  sub->set_source_id("policy");
+  EXPECT_FALSE(ValidateConfig(config).ok());  // Default owner no longer exists.
+  policy->set_initial_source("policy");
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  sub->set_source_id("../invalid");
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+
+TEST(ValidationTest, ObservationPacketModeIsExplicitAndUnitsMatchTheChannel) {
+  auto config = MakeConfig();
+  auto* sensor = config.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
+  auto* p = sensor->mutable_node()->add_publishers();
+  p->set_topic("/raw");
+  p->set_publish_rate_hz(20);
+  p->set_observation_packet(true);
+  p->set_ros2_data_type(ros2::data_type::JOINT_STATE);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  p->set_ros2_data_type(ros2::data_type::UINT8_MULTI_ARRAY);
+  ASSERT_TRUE(ValidateConfig(config).ok());
+  sensor->mutable_observation_policy()->set_stale_after_ms(0);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+  sensor->mutable_observation_policy()->set_stale_after_ms(100);
+  config.mutable_robot()->mutable_boards(0)->mutable_channels(0)->set_drive(robot::board::STEP_DIR);
+  EXPECT_FALSE(ValidateConfig(config).ok());
+}
+
 TEST(ValidationTest, DirectSensorsDoNotRequireBoards) {
   config::Config config;
   auto& robot = *config.mutable_robot();

@@ -4,9 +4,7 @@ package ros2.node;
 
 import "ros2/proto/ros2_data_type.proto";
 
-// Enum values here must match with the file name under ros2/
-// (e.g. camera_publisher.cc, position_publisher.cc, etc.)
-// This is used to resolve the native binary path.
+// Enum names map to lowercase executable names under ros2/.
 enum NodeType {
   NODE_INVALID = 0;
   CAMERA_PUBLISHER = 1;
@@ -17,7 +15,7 @@ enum NodeType {
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
   AUDIO_PUBLISHER = 8;
-  MCU_BUS = 9;  // One process owns mixed MCU actuator + scalar subscriptions.
+  BOARD_PUBSUB = 9;  // Owns shared board connections, actuator commands, and observations.
 }
 
 enum QosReliabilityPolicy {
@@ -53,12 +51,16 @@ message QosSetting {
 }
 
 message Publisher {
+  // Emit a complete PerceptionPacket in UINT8_MULTI_ARRAY, retaining identity,
+  // timing, validity and payload atomically. False keeps the existing native type.
+  bool observation_packet = 4;
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
   uint32 publish_rate_hz = 3;
 }
 
 message Subscription {
+  string source_id = 3;  // Actuator command owner; unset means "default".
   ros2.data_type.Ros2DataType ros2_data_type = 1;
   string topic = 2;
 }

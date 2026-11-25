@@ -1,116 +1,157 @@
 #include "ros2/utils/actuator_commands.h"
 
+#include <chrono>
+#include <exception>
 #include <set>
 #include <stdexcept>
 #include <thread>
-#include <vector>
+#include <utility>
 
-#include "rclcpp/rclcpp.hpp"
 #include "robot/action/factory/action_factory.h"
 #include "ros2/logging.h"
 #include "ros2/utils/packet_parser.h"
 #include "utils/joshua_runtime.h"
 #include "utils/scope_exit.h"
+#include "utils/status_macros.h"
 
 namespace ros2_utils {
 
 ActuatorCommands::ActuatorCommands(rclcpp::Node& node,
-                                   int node_id,
+                                   int id,
                                    const config::Config& config,
-                                   bool auto_enable)
-    : manage_lifecycle_(auto_enable) {
-  for (const auto& single_action : config.robot().actions().single_actions()) {
-    if (single_action.action_type() != robot::action::ActionType::ACTUATOR ||
-        static_cast<int>(single_action.node().id()) != node_id) {
+                                   ShutdownMode shutdown_mode)
+    : node_(node), shutdown_mode_(shutdown_mode) {
+  bool complete = false;
+  joshua::ScopeExit rollback([&] {
+    if (!complete) ShutdownActions(ShutdownMode::kDisable);
+  });
+
+  for (const auto& action : config.robot().actions().single_actions()) {
+    if (action.action_type() != robot::action::ACTUATOR ||
+        action.node().id() != static_cast<uint32_t>(id))
       continue;
-    }
 
-    const auto& action_proto = single_action.actuator();
-
-    auto interface =
-        robot::action::ActionFactory::CreateAction(single_action, config.robot().boards());
-    if (!interface.ok()) throw std::runtime_error(interface.status().ToString());
-
-    auto shared_interface =
-        std::shared_ptr<robot::action::ActionInterface>(std::move(interface.value()));
-
-    const bool require_explicit_enable =
-        action_proto.motor_type() == robot::action::MOTOR_STEPPER_NEMA17 &&
-        action_proto.stepper_config().require_explicit_enable();
-    if (auto_enable && !require_explicit_enable) {
-      robot::action::ActionPacket enable_packet;
-      enable_packet.set_preset(robot::action::PresetCommand::PRESET_ENABLE_TORQUE);
-      const auto enabled = shared_interface->SetAction(enable_packet);
-      if (!enabled.ok()) throw std::runtime_error(enabled.ToString());
-    }
-
-    for (const auto& subscription : single_action.node().subscriptions()) {
-      const std::string& topic = subscription.topic();
-      Actuator& actuator =
-          actuators_.emplace_back(Actuator{.topic = topic,
-                                           .interface = shared_interface,
-                                           .limits = {action_proto.operational_lower_limit(),
-                                                      action_proto.operational_upper_limit()}});
-
+    auto prepared = action;
+    if (prepared.actuator().motor_type() == robot::action::MOTOR_STEPPER_NEMA17)
+      prepared.mutable_actuator()->mutable_stepper_config()->set_require_explicit_enable(true);
+    auto made = robot::action::ActionFactory::CreateAction(prepared, config.robot().boards());
+    if (!made.ok()) throw std::runtime_error(made.status().ToString());
+    auto interface = std::shared_ptr<robot::action::ActionInterface>(std::move(*made));
+    std::set<std::string> sources;
+    for (const auto& sub : action.node().subscriptions())
+      sources.insert(sub.source_id().empty() ? "default" : sub.source_id());
+    if (sources.empty()) sources.insert("default");
+    auto gate = std::make_shared<robot::action::ControlGate>(
+        interface, action.actuator().control_policy(), sources);
+    const auto initialized = gate->Initialize();
+    if (!initialized.ok()) throw std::runtime_error(initialized.ToString());
+    gates_.push_back({gate, action.actuator().board_name()});
+    const auto& a = action.actuator();
+    for (const auto& sub : action.node().subscriptions()) {
+      const auto source = sub.source_id().empty() ? "default" : sub.source_id();
+      const auto lower = a.operational_lower_limit();
+      const auto upper = a.operational_upper_limit();
       auto result = ros2_utils::CreateActionMessageSubscription(
-          node,
-          subscription,
-          single_action,
-          [&actuator](absl::StatusOr<robot::action::ActionPacket> parsed) {
-            if (!parsed.ok()) {
-              JOSHUA_LOG(ERROR) << "Invalid command on '" << actuator.topic
-                                << "': " << parsed.status().ToString();
-              return;
+          node_,
+          sub,
+          action,
+          [this, gate, source, lower, upper](absl::StatusOr<robot::action::ActionPacket> packet) {
+            absl::Status status = packet.status();
+            if (packet.ok()) {
+              status = ros2_utils::ResolvePositionEncoding(*packet, lower, upper);
+              if (status.ok())
+                status = gate->Execute(source,
+                                       *packet,
+                                       node_.now().nanoseconds(),
+                                       robot::action::ControlGate::Clock::now());
             }
-            actuator.reusable_packet = *parsed;
-            const auto [lower, upper] = actuator.limits;
-            const auto encoding_status =
-                ros2_utils::ResolvePositionEncoding(actuator.reusable_packet, lower, upper);
-            if (!encoding_status.ok()) {
-              JOSHUA_LOG(ERROR) << "Invalid position on '" << actuator.topic
-                                << "': " << encoding_status.ToString();
-              return;
-            }
-            const auto status = actuator.interface->SetAction(actuator.reusable_packet);
-            if (!status.ok()) {
-              JOSHUA_LOG(ERROR) << "Actuator '" << actuator.topic
-                                << "' rejected command: " << status.ToString();
-            }
+            if (!status.ok()) JOSHUA_LOG(WARNING) << "Command rejected: " << status.ToString();
           });
       if (!result.ok()) throw std::invalid_argument(result.status().ToString());
-      actuator.subscription = *result;
+      subscriptions_.push_back(*result);
     }
+    const std::string key =
+        a.actuator_name().empty() ? "actuator_" + std::to_string(a.id()) : a.actuator_name();
+    const std::string prefix = "~/" + key + "/";
+    AddService(prefix + "enable", [this, gate] {
+      return gate->Enable(robot::action::ControlGate::Clock::now(), node_.now().nanoseconds());
+    });
+    AddService(prefix + "stop", [gate] { return gate->Stop(); });
+    AddService(prefix + "recover",
+               [this, gate] { return gate->Recover(node_.now().nanoseconds()); });
+    for (const auto& source : sources)
+      AddService(prefix + "select_" + source, [this, gate, source] {
+        return gate->SelectSource(source, node_.now().nanoseconds());
+      });
   }
 
-  if (actuators_.empty()) {
-    JOSHUA_LOG(ERROR) << "No actuators found in configuration for node_id " << node_id << "!";
-    return;
-  }
-
-  JOSHUA_LOG(INFO) << "Actuator subscriber node started with " << actuators_.size()
-                   << " subscriptions for node_id " << node_id << "!";
+  watchdog_ = node_.create_wall_timer(
+      std::chrono::milliseconds(10),
+      [this] {
+        for (auto& actuator : gates_)
+          actuator.gate->Poll(robot::action::ControlGate::Clock::now()).IgnoreError();
+      },
+      node_.get_node_base_interface()->get_default_callback_group());
+  complete = true;
 }
 
 ActuatorCommands::~ActuatorCommands() {
-  if (!manage_lifecycle_) return;  // Mixed bus owner performs disabled board reset.
+  ShutdownActions(joshua::RuntimeFailed() || std::uncaught_exceptions() ? ShutdownMode::kDisable
+                                                                        : shutdown_mode_);
+}
+
+ActuatorCommands::StopRequests ActuatorCommands::RequestStopActions() {
+  StopRequests requests;
+  requests.reserve(gates_.size());
+  for (auto& actuator : gates_) requests.emplace_back(actuator.gate, actuator.gate->RequestStop());
+  return requests;
+}
+
+absl::Status ActuatorCommands::CompleteStopActions(const StopRequests& requests) {
+  absl::Status result;
+  for (const auto& [gate, request] : requests) result.Update(gate->CompleteStopRequest(request));
+  return result;
+}
+
+absl::Status ActuatorCommands::StopBoardActions(const std::string& board_name,
+                                                bool output_already_disabled) {
+  absl::Status result;
+  for (auto& actuator : gates_)
+    if (actuator.board_name == board_name)
+      result.Update(actuator.gate->Stop(output_already_disabled));
+  return result;
+}
+
+void ActuatorCommands::ShutdownActions(ShutdownMode mode) {
+  watchdog_.reset();
   joshua::RunCleanup("actuator shutdown", [&] {
+    if (mode == ShutdownMode::kDisable) RequestStopActions();
     std::vector<std::thread> threads;
-    threads.reserve(actuators_.size());
+    threads.reserve(gates_.size());
     joshua::ScopeExit join([&] {
-      for (auto& thread : threads) {
+      for (auto& thread : threads)
         if (thread.joinable()) thread.join();
-      }
     });
-    std::set<robot::action::ActionInterface*> torn_down;
-    for (auto& actuator : actuators_) {
-      if (!torn_down.insert(actuator.interface.get()).second) continue;
-      threads.push_back(joshua::StartWorker("actuator teardown", [&actuator] {
-        robot::action::ActionPacket packet;
-        packet.set_preset(robot::action::PresetCommand::PRESET_TEARDOWN);
-        joshua::ThrowIfError(actuator.interface->SetAction(packet));
+    for (const auto& actuator : gates_)
+      threads.push_back(joshua::StartWorker("actuator teardown", [gate = actuator.gate, mode] {
+        joshua::ThrowIfError(gate->Shutdown(mode));
       }));
-    }
   });
+}
+
+void ActuatorCommands::AddService(const std::string& name, std::function<absl::Status()> action) {
+  services_.push_back(node_.create_service<std_srvs::srv::Trigger>(
+      name,
+      [action](std::shared_ptr<std_srvs::srv::Trigger::Request>,
+               std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+        auto status = action();
+        response->success = status.ok();
+        response->message = status.ok() ? "Host control transition complete; device recovery and "
+                                          "physical verification are separate"
+                                        : status.ToString();
+      },
+      rmw_qos_profile_services_default,
+      node_.get_node_base_interface()->get_default_callback_group()));
 }
 
 }  // namespace ros2_utils

@@ -21,6 +21,7 @@ class PerceptionFactory {
  public:
   static const std::vector<SensorImplementation>& Implementations();
   // Resolves the concrete sensor config and any board/channel dependencies.
+  // Caller owns sensor Init/read/stop/Teardown; board/session resolution stays here.
   static absl::StatusOr<std::unique_ptr<PerceptionInterface>> CreatePerception(
       const SinglePerception& config,
       const google::protobuf::RepeatedPtrField<robot::board::Board>& boards);

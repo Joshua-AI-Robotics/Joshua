@@ -191,6 +191,7 @@ struct JoshuaWireCoordinator::Impl {
     }
     stream->latest = Observation{
         sample, stream->schema, frame.received_at, std::chrono::microseconds(0), gaps, overwritten};
+    stream->latest->received_at_unix = frame.received_at_unix;
     return false;
   }
   bool OnWorker() const {

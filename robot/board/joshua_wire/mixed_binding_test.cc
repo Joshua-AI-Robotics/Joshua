@@ -1,4 +1,4 @@
-// Production board/perception + MCU_BUS over a PTY and the actual mixed loop.
+// Production board/perception + BOARD_PUBSUB over a PTY and the actual mixed loop.
 // Only GPIO, ADC and time are native hooks; no device is opened or flashed.
 #include <fcntl.h>
 #include <spawn.h>
@@ -28,13 +28,12 @@
 #include "robot/board/joshua_wire/serial_validation.h"
 #include "robot/comm/factory/comm_factory.h"
 #include "robot/perception/factory/perception_factory.h"
-#include "std_msgs/msg/bool.hpp"
-#include "utils/joshua_runtime.h"
-
-// Compile the same node implementations used by the standalone executables.
 #define JOSHUA_NODE_TEST
 #include "ros2/actuator_subscriber.cc"
-#include "ros2/mcu_bus.cc"
+#include "ros2/board_pubsub.cc"
+#include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/float32.hpp"
+#include "utils/joshua_runtime.h"
 extern char** environ;
 
 ChannelState g_channels[1];
@@ -62,7 +61,7 @@ class MixedBindingTest : public ::testing::Test {
   std::mutex firmware_mutex;
   std::thread device;
   std::atomic<bool> stopping{false}, drop_targets{false}, drop_all{false}, adc_ready{true};
-  std::atomic<int> targets{0};
+  std::atomic<int> targets{0}, estops{0};
   JoshuaMixedDevice mixed{};
   jw_mixed_serial_t scheduler{};
   jw_stream_decoder_t decoder{};
@@ -130,7 +129,9 @@ class MixedBindingTest : public ::testing::Test {
           jw_frame_t frame{};
           jw_profile_request_t p{};
           s->last_target = false;
-          if (jw_decode_frame(bytes, size, &frame) == JW_RESULT_OK && frame.cmd == JW_CMD_PROFILE &&
+          const bool decoded = jw_decode_frame(bytes, size, &frame) == JW_RESULT_OK;
+          if (decoded && frame.cmd == JW_CMD_ESTOP) ++s->estops;
+          if (decoded && frame.cmd == JW_CMD_PROFILE &&
               jw_decode_profile_request(frame.payload, frame.payload_len, &p) == JW_RESULT_OK &&
               p.profile_id == JW_PROFILE_ACTUATOR && p.operation == JW_ACTUATOR_SET_TARGET) {
             s->last_target = true;
@@ -192,6 +193,15 @@ class MixedBindingTest : public ::testing::Test {
     std::lock_guard lock(firmware_mutex);
     return g_channels[0].enabled;
   }
+  std::string SetUniqueActuatorName(config::Config& local) {
+    const std::string name = "mixed_stepper_" + std::to_string(getpid()) + "_" +
+                             std::to_string(Clock::now().time_since_epoch().count());
+    auto* action = local.mutable_robot()->mutable_actions()->mutable_single_actions(0);
+    action->mutable_actuator()->set_actuator_name(name);
+    for (auto& sub : *action->mutable_node()->mutable_subscriptions())
+      sub.set_topic(name + sub.topic().substr(sub.topic().find_last_of('/')));
+    return name;
+  }
 };
 
 TEST_F(MixedBindingTest, ProductionFactoriesShareSessionAndPreserveObservationMetadata) {
@@ -211,6 +221,8 @@ TEST_F(MixedBindingTest, ProductionFactoriesShareSessionAndPreserveObservationMe
   EXPECT_EQ(packet.scalar().unit(), 65535);
   EXPECT_EQ(packet.scalar().boot_id(), 1234);
   EXPECT_GT(packet.scalar().host_receipt_steady_ns(), 0);
+  EXPECT_GT(packet.sample_metadata().host_receipt_unix_ns(), 0);
+  EXPECT_EQ(packet.sequence_id(), packet.scalar().acquisition_sequence());
   EXPECT_EQ(packet.timestamp(), 0);
   auto channel = (*board)->OpenChannel(0);
   ASSERT_TRUE(channel.ok());
@@ -244,6 +256,58 @@ TEST_F(MixedBindingTest, HeartbeatsNeverRefreshMovingTargetsAndFailureInvalidate
   EXPECT_EQ(pins[4], 1);
 }
 
+TEST_F(MixedBindingTest, ReenableAfterStopHoldsUntilFreshPositionCommand) {
+  const auto name = SetUniqueActuatorName(config);
+  auto runtime = std::make_shared<BoardPubSub>(name, 1, config);
+  auto client = std::make_shared<rclcpp::Node>(name + "_client");
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(runtime);
+  executor.add_node(client);
+  auto command = client->create_publisher<std_msgs::msg::Float32>(name + "/position", 1);
+  auto call = [&](const std::string& operation) {
+    using Trigger = std_srvs::srv::Trigger;
+    auto service = client->create_client<Trigger>("/" + name + "/" + name + "/" + operation);
+    if (!service->wait_for_service(2s)) return false;
+    auto reply = service->async_send_request(std::make_shared<Trigger::Request>());
+    return executor.spin_until_future_complete(reply, 2s) == rclcpp::FutureReturnCode::SUCCESS &&
+           reply.get()->success;
+  };
+  auto feedback = [&] {
+    std::lock_guard lock(firmware_mutex);
+    return g_channels[0].feedback;
+  };
+  ASSERT_TRUE(Await([&] { return command->get_subscription_count() == 1; }));
+  ASSERT_TRUE(call("enable"));
+  std_msgs::msg::Float32 target;
+  target.data = 360;
+  command->publish(target);
+  ASSERT_TRUE(Await([&] {
+    executor.spin_some();
+    return feedback().position > 0;
+  }));
+  ASSERT_TRUE(call("stop"));
+  ASSERT_FALSE(Enabled());
+  const float stopped_position = feedback().position;
+  ASSERT_LT(stopped_position, 3200);
+
+  ASSERT_TRUE(call("recover"));
+  ASSERT_TRUE(call("enable"));
+  ASSERT_TRUE(Enabled());
+  const auto resumed_at = feedback().metadata.timestamp_us;
+  ASSERT_TRUE(Await([&] { return feedback().metadata.timestamp_us >= resumed_at + 50000; }));
+  EXPECT_EQ(feedback().position, stopped_position);
+  EXPECT_EQ(targets.load(), 1);
+
+  target.data = 0;
+  command->publish(target);
+  ASSERT_TRUE(Await([&] {
+    executor.spin_some();
+    return feedback().position == 0;
+  }));
+  EXPECT_EQ(targets.load(), 2);
+  EXPECT_TRUE(call("stop"));
+}
+
 TEST_F(MixedBindingTest, ReservedStopRetiresLostTargetReplyWithoutReplayingOrEnabling) {
   auto board = robot::board::BoardFactory::GetOrCreate(config.robot().boards(0));
   ASSERT_TRUE(board.ok()) << board.status();
@@ -265,6 +329,69 @@ TEST_F(MixedBindingTest, ReservedStopRetiresLostTargetReplyWithoutReplayingOrEna
   EXPECT_FALSE(pending.get().ok());
   EXPECT_FALSE(Enabled());
   EXPECT_FALSE((*channel)->Enable().ok());
+}
+
+TEST_F(MixedBindingTest, RosEstopPreemptsBlockedCommandAndWatchdogWithTwoExecutorThreads) {
+  auto local = config;
+  local.mutable_robot()->clear_perceptions();
+  auto* policy = local.mutable_robot()->mutable_boards(0)->mutable_joshua_wire_host_policy();
+  policy->set_operation_timeout_ms(2000);
+  policy->set_attempt_timeout_ms(1000);
+  local.mutable_robot()->mutable_boards(0)->mutable_firmware()->set_communication_watchdog_us(
+      5000000);
+  const auto name = SetUniqueActuatorName(local);
+  ASSERT_TRUE(config::ValidateConfig(local).ok()) << config::ValidateConfig(local);
+  auto runtime = std::make_shared<BoardPubSub>(name, 1, local);
+  auto client = std::make_shared<rclcpp::Node>(name + "_client");
+  auto enable = client->create_publisher<std_msgs::msg::Bool>(name + "/torque", 1);
+  auto command = client->create_publisher<std_msgs::msg::Float32>(name + "/position", 1);
+  auto stop = client->create_client<std_srvs::srv::Trigger>("/" + name + "/estop");
+  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 2);
+  executor.add_node(runtime);
+  executor.add_node(client);
+  std::thread spin([&] { executor.spin(); });
+  const bool ready = Await(
+      [&] {
+        return enable->get_subscription_count() && command->get_subscription_count() &&
+               stop->service_is_ready();
+      },
+      5000ms);
+  EXPECT_TRUE(ready);
+  if (ready) {
+    std_msgs::msg::Bool on;
+    on.data = true;
+    enable->publish(on);
+    const bool enabled = Await([&] { return Enabled(); });
+    EXPECT_TRUE(enabled);
+    if (enabled) {
+      drop_targets = true;
+      std_msgs::msg::Float32 target;
+      target.data = 3;
+      command->publish(target);
+      const bool pending = Await([&] { return targets.load() > 0; });
+      EXPECT_TRUE(pending);
+      if (pending) {
+        // Give the 10 ms watchdog time to become runnable behind the command.
+        std::this_thread::sleep_for(30ms);
+        auto result = stop->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+        EXPECT_EQ(result.wait_for(300ms), std::future_status::ready);
+        EXPECT_GT(estops.load(), 0);
+        if (result.wait_for(0ms) == std::future_status::ready) {
+          EXPECT_TRUE(result.get()->success);
+        }
+        EXPECT_FALSE(Enabled());
+        EXPECT_EQ(targets.load(), 1);  // No retry of the preempted target.
+        enable->publish(on);
+        std::this_thread::sleep_for(30ms);
+        EXPECT_FALSE(Enabled());
+      }
+    }
+  }
+  executor.cancel();
+  spin.join();
+  executor.remove_node(runtime);
+  executor.remove_node(client);
+  runtime.reset();
 }
 
 TEST_F(MixedBindingTest, OperatorRecoveryProbeClearsLatchButNeverEnablesOrRestoresStream) {
@@ -419,7 +546,7 @@ TEST_P(MixedRecorderQosTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExpl
     for (auto& pub : *s.mutable_node()->mutable_publishers()) pub.set_topic(prefix + pub.topic());
   }
   ASSERT_TRUE(config::ValidateConfig(local).ok());
-  auto runtime = std::make_shared<McuBus>(name, 1, local);
+  auto runtime = std::make_shared<BoardPubSub>(name, 1, local);
   EXPECT_FALSE(Enabled());
   auto client = std::make_shared<rclcpp::Node>(name + "_client");
   std::atomic<bool> observed{false};

@@ -5,7 +5,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -25,14 +24,16 @@ class Lds01Driver : public LidarInterface {
   std::string GetId() override;
   absl::StatusOr<robot::perception::PerceptionPacket> GetData() override;
   absl::Status Teardown() override;
+  void RequestStop() noexcept override {
+    stop_requested_.store(true);
+    stop_receiving_.store(true);
+  }
 
  private:
-  void reading_thread_func();
-
   std::shared_ptr<robot::comm::ByteStream> stream_;
   std::string id_;
   mutable robot::perception::PerceptionPacket reusable_packet_;
-  std::thread receiving_thread_;
+  std::atomic<bool> stop_requested_{false};
   std::atomic<bool> stop_receiving_{true};
   std::mutex lifecycle_mutex_;
   bool motor_stop_pending_ = false;

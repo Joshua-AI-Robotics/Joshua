@@ -97,10 +97,12 @@ py_library(
 )
 
 _CAMERA_PUBLISHER_DEPS = [
+    ":acquisition_schedule",
+    ":observation_publisher",
+    "//utils:scope_exit",
+    "//utils:status_macros",
     "//config/proto:config_cc_proto",
     "//robot/perception/factory:perception_factory",
-    "//robot/perception/interfaces:perception_interface",
-    "//robot/perception/proto:perception_cc_proto",
     "//robot/perception/proto:perception_packet_cc_proto",
     "//ros2:logging",
     "//ros2:node_runner",
@@ -109,9 +111,6 @@ _CAMERA_PUBLISHER_DEPS = [
     "//ros2/utils:qos_setting",
     "//ros2/utils:robot_time_conversion",
     "//ros2/utils:robot_timer",
-    "//utils:robot_time",
-    "@abseil-cpp//absl/status:status",
-    "@abseil-cpp//absl/status:statusor",
     "@ros2_deps//:cpp_sensor_msgs",
     "@ros2_deps//:cpp_std_msgs",
     "@ros2_deps//:rclcpp",
@@ -120,16 +119,18 @@ _CAMERA_PUBLISHER_DEPS = [
 ros2_cpp_binary(
     name = "camera_publisher",
     srcs = ["camera_publisher.cc"],
+    data = [
+        "//config/config_preset:config_presets",
+    ],
     set_up_ament = True,
     deps = _CAMERA_PUBLISHER_DEPS,
 )
 
-# Let the test include the private implementation without compiling it separately.
 ros2_cpp_library(
     name = "camera_publisher_test_source",
     testonly = True,
     textual_hdrs = ["camera_publisher.cc"],
-    visibility = ["//visibility:private"],
+    visibility = ["//ros2:__pkg__"],
     deps = _CAMERA_PUBLISHER_DEPS,
 )
 
@@ -142,6 +143,21 @@ ros2_cpp_test(
     ],
 )
 
+_POSITION_PUBLISHER_DEPS = [
+    ":acquisition_schedule",
+    ":observation_publisher",
+    "//utils:scope_exit",
+    "//utils:status_macros",
+    "//config/proto:config_cc_proto",
+    "//robot/perception/factory:perception_factory",
+    "//ros2:logging",
+    "//ros2:node_runner",
+    "//ros2/utils:packet_parser",
+    "//ros2/utils:qos_setting",
+    "//ros2/utils:robot_timer",
+    "@ros2_deps//:rclcpp",
+]
+
 ros2_cpp_binary(
     name = "position_publisher",
     srcs = ["position_publisher.cc"],
@@ -149,17 +165,37 @@ ros2_cpp_binary(
         "//config/config_preset:config_presets",
     ],
     set_up_ament = True,
-    deps = [
-        "//config/proto:config_cc_proto",
-        "//robot/perception/factory:perception_factory",
-        "//ros2:logging",
-        "//ros2:node_runner",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "//ros2/utils:robot_timer",
-        "@ros2_deps//:rclcpp",
-    ],
+    deps = _POSITION_PUBLISHER_DEPS,
 )
+
+ros2_cpp_library(
+    name = "position_publisher_test_source",
+    testonly = True,
+    textual_hdrs = ["position_publisher.cc"],
+    visibility = ["//ros2:__pkg__"],
+    deps = _POSITION_PUBLISHER_DEPS,
+)
+
+_LIDAR_PUBLISHER_DEPS = [
+    ":acquisition_schedule",
+    ":observation_publisher",
+    "//utils:scope_exit",
+    "//utils:status_macros",
+    "//config/proto:config_cc_proto",
+    "//robot/perception/factory:perception_factory",
+    "//robot/perception/proto:perception_cc_proto",
+    "//robot/perception/proto:perception_packet_cc_proto",
+    "//ros2:logging",
+    "//ros2:node_runner",
+    "//ros2/proto:node_cc_proto",
+    "//ros2/utils:packet_parser",
+    "//ros2/utils:qos_setting",
+    "//ros2/utils:robot_time_conversion",
+    "//ros2/utils:robot_timer",
+    "@ros2_deps//:cpp_sensor_msgs",
+    "@ros2_deps//:cpp_std_msgs",
+    "@ros2_deps//:rclcpp",
+]
 
 ros2_cpp_binary(
     name = "lidar_publisher",
@@ -168,22 +204,15 @@ ros2_cpp_binary(
         "//config/config_preset:config_presets",
     ],
     set_up_ament = True,
-    deps = [
-        "//config/proto:config_cc_proto",
-        "//robot/perception/factory:perception_factory",
-        "//robot/perception/proto:perception_cc_proto",
-        "//robot/perception/proto:perception_packet_cc_proto",
-        "//ros2:logging",
-        "//ros2:node_runner",
-        "//ros2/proto:node_cc_proto",
-        "//ros2/utils:packet_parser",
-        "//ros2/utils:qos_setting",
-        "//ros2/utils:robot_time_conversion",
-        "//ros2/utils:robot_timer",
-        "@ros2_deps//:cpp_sensor_msgs",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
+    deps = _LIDAR_PUBLISHER_DEPS,
+)
+
+ros2_cpp_library(
+    name = "lidar_publisher_test_source",
+    testonly = True,
+    textual_hdrs = ["lidar_publisher.cc"],
+    visibility = ["//ros2:__pkg__"],
+    deps = _LIDAR_PUBLISHER_DEPS,
 )
 
 _ACTUATOR_SUBSCRIBER_DEPS = [
@@ -202,30 +231,6 @@ ros2_cpp_binary(
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
-_MCU_BUS_DEPS = [
-    "//config/proto:config_cc_proto",
-    "//robot/board/factory:board_factory",
-    "//robot/perception/factory:perception_factory",
-    "//ros2:logging",
-    "//ros2:node_runner",
-    "//ros2/utils:actuator_commands",
-    "//ros2/utils:qos_setting",
-    "@abseil-cpp//absl/status:status",
-    "@ros2_deps//:cpp_std_msgs",
-    "@ros2_deps//:cpp_std_srvs",
-    "@ros2_deps//:rclcpp",
-]
-
-ros2_cpp_binary(
-    name = "mcu_bus",
-    srcs = ["mcu_bus.cc"],
-    data = ["//config/config_preset:config_presets"],
-    set_up_ament = True,
-    deps = _MCU_BUS_DEPS,
-)
-
-# Tests include the implementation with main excluded; production nodes stay
-# single-source executables and are never linked as reusable node libraries.
 ros2_cpp_library(
     name = "actuator_subscriber_test_source",
     testonly = True,
@@ -237,38 +242,42 @@ ros2_cpp_library(
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
+_BOARD_PUBSUB_DEPS = [
+    ":acquisition_schedule",
+    "//utils:scope_exit",
+    "//utils:status_macros",
+    ":logging",
+    ":node_runner",
+    ":observation_publisher",
+    "//config/proto:config_cc_proto",
+    "//ros2/utils:actuator_commands",
+    "//robot/board/factory:board_factory",
+    "//robot/perception/factory:perception_factory",
+    "//ros2/utils:packet_parser",
+    "//ros2/utils:qos_setting",
+    "@abseil-cpp//absl/status:status",
+    "@glog",
+    "@ros2_deps//:cpp_std_msgs",
+    "@ros2_deps//:cpp_std_srvs",
+    "@ros2_deps//:rclcpp",
+]
+
 ros2_cpp_library(
-    name = "mcu_bus_test_source",
+    name = "board_pubsub_test_source",
     testonly = True,
-    textual_hdrs = ["mcu_bus.cc"],
+    textual_hdrs = ["board_pubsub.cc"],
     visibility = [
         "//robot/board/joshua_wire:__pkg__",
         "//ros2:__pkg__",
     ],
-    deps = _MCU_BUS_DEPS,
+    deps = _BOARD_PUBSUB_DEPS,
 )
 
 ros2_cpp_test(
-    name = "actuator_subscriber_test",
-    srcs = ["actuator_subscriber_test.cc"],
+    name = "board_pubsub_stop_test",
+    srcs = ["board_pubsub_stop_test.cc"],
     deps = [
-        ":actuator_subscriber_test_source",
-        "//config:validation",
-        "//config/proto:config_cc_proto",
-        "//robot/board/factory:board_factory",
-        "//robot/board/interfaces:board_interfaces",
-        "@abseil-cpp//absl/status:status",
-        "@googletest//:gtest_main",
-        "@ros2_deps//:cpp_std_msgs",
-        "@ros2_deps//:rclcpp",
-    ],
-)
-
-ros2_cpp_test(
-    name = "mcu_bus_test",
-    srcs = ["mcu_bus_test.cc"],
-    deps = [
-        ":mcu_bus_test_source",
+        ":board_pubsub_test_source",
         "//config/proto:config_cc_proto",
         "//robot/board/interfaces:board_interfaces",
         "@abseil-cpp//absl/status:status",
@@ -358,6 +367,7 @@ ros2_cpp_binary(
     name = "audio_publisher",
     srcs = ["audio_publisher.cc"],
     deps = [
+        ":observation_publisher",
         "//config/proto:config_cc_proto",
         "//robot/perception/audio:audio_capture",
         "//robot/perception/factory:perception_factory",
@@ -366,5 +376,92 @@ ros2_cpp_binary(
         "//ros2/utils:qos_setting",
         "//ros2/utils:robot_timer",
         "@ros2_deps//:cpp_std_msgs",
+    ],
+)
+
+ros2_cpp_binary(
+    name = "board_pubsub",
+    srcs = ["board_pubsub.cc"],
+    data = ["//config/config_preset:config_presets"],
+    set_up_ament = True,
+    deps = _BOARD_PUBSUB_DEPS,
+)
+
+cc_test(
+    name = "board_pubsub_test",
+    srcs = ["board_pubsub_test.cc"],
+    deps = [
+        ":board_pubsub_test_source",
+        "//robot/comm/factory:comm_factory",
+        "//robot/comm/testing:fake_caller_sized_message_transport",
+        "@googletest//:gtest_main",
+        "@protobuf",
+        "@ros2_deps//:cpp_sensor_msgs",
+    ],
+)
+
+cc_library(
+    name = "acquisition_schedule",
+    hdrs = ["acquisition_schedule.h"],
+    deps = [
+        "//robot/perception/proto:perception_cc_proto",
+        "//ros2/utils:robot_timer",
+    ],
+)
+
+cc_library(
+    name = "observation_publisher",
+    hdrs = ["observation_publisher.h"],
+    deps = [
+        ":logging",
+        "//config/proto:config_cc_proto",
+        "//robot/perception/interfaces:observation_source",
+        "//ros2/utils:packet_parser",
+        "//ros2/utils:qos_setting",
+        "//ros2/utils:robot_time_conversion",
+        "//ros2/utils:robot_timer",
+        "//utils:status_macros",
+        "@ros2_deps//:cpp_sensor_msgs",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:rclcpp",
+    ],
+)
+
+ros2_cpp_test(
+    name = "perception_nodes_test",
+    srcs = ["perception_nodes_test.cc"],
+    deps = [
+        ":board_pubsub_test_source",
+        ":camera_publisher_test_source",
+        ":lidar_publisher_test_source",
+        ":position_publisher_test_source",
+        "@googletest//:gtest_main",
+    ],
+)
+
+ros2_cpp_test(
+    name = "perception_shutdown_test",
+    srcs = ["perception_shutdown_test.cc"],
+    deps = [
+        ":camera_publisher_test_source",
+        "//launcher/node_manager",
+        "@googletest//:gtest",
+    ],
+)
+
+ros2_cpp_test(
+    name = "actuator_subscriber_test",
+    srcs = ["actuator_subscriber_test.cc"],
+    deps = [
+        ":actuator_subscriber_test_source",
+        "//config:validation",
+        "//config/proto:config_cc_proto",
+        "//robot/board/factory:board_factory",
+        "//robot/board/interfaces:board_interfaces",
+        "@abseil-cpp//absl/status:status",
+        "@googletest//:gtest_main",
+        "@ros2_deps//:cpp_std_msgs",
+        "@ros2_deps//:cpp_std_srvs",
+        "@ros2_deps//:rclcpp",
     ],
 )

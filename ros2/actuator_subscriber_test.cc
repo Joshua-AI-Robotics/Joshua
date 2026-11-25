@@ -12,6 +12,7 @@
 #include "rclcpp/version.h"
 #include "robot/board/factory/board_factory.h"
 #include "std_msgs/msg/float32.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 #define JOSHUA_NODE_TEST
 #include "ros2/actuator_subscriber.cc"
@@ -116,6 +117,17 @@ TEST_F(ActuatorSubscriberTest,
            second->get_subscription_count() == 1;
   }));
   EXPECT_EQ(other_node->get_subscription_count(), 0u);
+
+  for (int index = 0; index < 2; ++index) {
+    EXPECT_EQ(channels_[index]->SetTarget(robot::board::TargetMode::kPosition, 1).code(),
+              absl::StatusCode::kFailedPrecondition);
+    auto enable = client_->create_client<std_srvs::srv::Trigger>("/" + prefix_ + "_runtime/" +
+                                                                 Name(index) + "/enable");
+    ASSERT_TRUE(WaitUntil([&] { return enable->service_is_ready(); }));
+    auto result = enable->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
+    ASSERT_TRUE(WaitUntil([&] { return result.wait_for(0ms) == std::future_status::ready; }));
+    ASSERT_TRUE(result.get()->success);
+  }
 
   Message message;
   message.data = 11;

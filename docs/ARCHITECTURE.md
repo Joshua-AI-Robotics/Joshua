@@ -97,6 +97,17 @@ process. See the [node manager guide](../launcher/node_manager/AGENTS.md) for th
 Linux ownership contract and [ROS runtime guide](../ros2/AGENTS.md#process-runtime-and-failure-handling)
 for startup, cancellation, and cleanup.
 
+## Perception ownership
+
+The camera, lidar, position and composed bus nodes own their per-sensor state and
+optional acquisition workers in their complete `.cc` implementations. Factories
+select drivers and resolve shared board/transport handles. Blocking sensors use
+one guarded worker per sensor with latest-sample fan-out; scalar streams read the
+existing coordinator cache without another worker. Audio preserves chunk streaming.
+Shared helpers validate and convert caller-owned samples without a generic node
+or an additional acquisition owner. See [ROS observation lifecycle and tests](../ros2/AGENTS.md#observation-readiness)
+for cancellation, rollback, clocks and the uninterruptible-camera process fallback.
+
 ## Hardware topology and latency budgets
 
 The normative topology and qualification rules live in

@@ -29,7 +29,13 @@ Lds01Driver::~Lds01Driver() {
 
 absl::Status Lds01Driver::Init() {
   std::lock_guard<std::mutex> lock(lifecycle_mutex_);
+  stop_receiving_.store(false);
+  if (stop_requested_) {
+    stop_receiving_.store(true);
+    return absl::CancelledError("LiDAR stopped");
+  }
   ABSL_RETURN_IF_ERROR(stream_->Open());
+  if (stop_requested_) return absl::CancelledError("LiDAR stopped");
 
   // Send start motor command (required for LDS-01)
   std::vector<uint8_t> start_cmd = {'b'};
@@ -37,7 +43,6 @@ absl::Status Lds01Driver::Init() {
   motor_stop_pending_ = true;
   ABSL_RETURN_IF_ERROR(stream_->Write(start_cmd));
 
-  stop_receiving_.store(false);
   return absl::OkStatus();
 }
 
@@ -156,6 +161,7 @@ absl::StatusOr<robot::perception::PerceptionPacket> Lds01Driver::GetData() {
     }
   }
 
+  if (stop_receiving_) return absl::CancelledError("LiDAR stopped");
   LOG(INFO) << "Returning LiDAR packet with " << reusable_packet_.point_cloud().x_size()
             << " points";
   return reusable_packet_;

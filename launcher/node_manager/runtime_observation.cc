@@ -7,7 +7,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <deque>
@@ -18,6 +18,7 @@
 
 #include "google/protobuf/struct.pb.h"
 #include "google/protobuf/util/json_util.h"
+#include "launcher/node_manager/node_name.h"
 #include "rcl_interfaces/msg/log.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
@@ -104,12 +105,6 @@ std::string Bounded(const std::string& raw, size_t cap, bool* altered = nullptr)
   }
   if (altered) *altered = text != raw;
   return text;
-}
-std::string NodeName(const ros2::node::Node& node) {
-  std::string name = ros2::node::NodeType_Name(node.node_type());
-  std::transform(
-      name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
-  return name + "_node_" + std::to_string(node.id());
 }
 std::string Gid(const uint8_t* bytes, size_t length) {
   static const char hex[] = "0123456789abcdef";
@@ -536,7 +531,7 @@ absl::StatusOr<std::unique_ptr<RuntimeObservation>> RuntimeObservation::Prepare(
       }
       if (at_start || s.sts3215_encoder_config().board_name().size() > 256)
         return absl::InvalidArgumentError("Feedback topic or board identity is invalid.");
-      impl->expected_node = NodeName(s.node());
+      impl->expected_node = RuntimeNodeName(s.node().node_type(), s.node().id());
       Set(selected_source, "topic", Text(impl->topic));
       Set(selected_source, "node_name", Text(impl->expected_node));
       Set(selected_source, "board_name", Text(s.sts3215_encoder_config().board_name()));
@@ -550,7 +545,7 @@ absl::StatusOr<std::unique_ptr<RuntimeObservation>> RuntimeObservation::Prepare(
       return absl::InvalidArgumentError("Selected sensor identity is absent or duplicated.");
     size_t publishers = 0;
     for (const auto* n : nodes) {
-      const auto name = NodeName(*n);
+      const auto name = RuntimeNodeName(n->node_type(), n->id());
       if (name.size() > 128)
         return absl::InvalidArgumentError("Configured node name exceeds observation bound.");
       impl->loggers.insert(name);

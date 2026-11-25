@@ -54,6 +54,9 @@ available before any job is registered. Processes are never automatically
 restarted, and a trajectory process may complete successfully without failing
 the remaining graph.
 
+For [shared board configurations](../../config/AGENTS.md#shared-board-runtime),
+NodeManager launches one `ros2/board_pubsub` process per configured node ID.
+
 ## Process ownership
 
 Each job is `launcher → guardian → application → descendants`. The existing

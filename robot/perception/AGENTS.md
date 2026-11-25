@@ -14,23 +14,15 @@ when the driver/coordinator does not already acquire/cache samples.
 
 ## Initialization ownership
 
-The baseline at develop `6cb9adca` has these owners. Preserve them during a
-refactor unless an explicit migration changes both factory and node callers.
-[PerceptionFactory](factory/perception_factory.cc) owns selection and assembly;
-calling `Init()` again in a new wrapper is not a recovery policy.
+[PerceptionFactory](factory/perception_factory.cc) selects and assembles drivers.
 
-| Backend | Initial setup owner | Failure and recovery baseline |
+| Backend | Initial setup owner | Failure and recovery |
 | --- | --- | --- |
-| OpenCV camera | CameraPublisher calls `Init()` per physical source | Invalid settings fail startup; unavailable initialization remains registered for one-second RobotTime retries. Read failure closes the source; node-owned reinitialization reapplies settings. |
-| ALSA audio | AudioPublisher calls `Init()` | Initial failure aborts construction. Capture code reopens after device failure; the node owns retry cadence and refreshes the negotiated polling schedule. |
-| LDS01 lidar | PerceptionFactory calls driver `Init()` before returning | The node logs/skips a source whose factory initialization fails; it has no registered automatic retry for that source. |
-| Board position | BoardFactory initializes the board before resolving its channel | Sensor `Init()` is a no-op; board lifetime/recovery stays with the shared owner. The position node skips failed factory resolution. |
-| Board scalar stream | Factory resolves the shared board and subscribes the scalar source | Sensor `Init()` is a no-op; MCU node construction fails if source creation fails. Closing a scalar lease must not close another consumer's board. |
-
-A migration must choose abort-versus-registered-unhealthy behavior explicitly,
-including retry cadence, settings reapplication, and cleanup if a later source
-fails. These existing differences must not disappear behind a generic factory
-or worker constructor.
+| OpenCV camera | CameraPublisher acquisition worker per physical source | Invalid configuration fails validation. Recoverable device errors close the source and trigger a retry after one RobotTime second. Each open reapplies the capture settings. |
+| ALSA audio | AudioPublisher calls `Init()` | Initial failure aborts construction. Capture code reopens after device failure. The node refreshes its polling schedule. |
+| LDS01 lidar | LidarPublisher acquisition worker calls `Init()` once | A failed factory or initialization result remains visible on the source status topic until restart. |
+| Board position | BoardFactory initializes the shared board. The acquisition worker initializes the sensor. | Failed source resolution remains visible on the status topic. The board owner controls board lifetime and recovery. |
+| Board scalar stream | The factory subscribes the stream. BoardPubSub initializes the sensor and reads the coordinator cache. | Source errors are reported through status. Closing a scalar lease preserves other consumers. Failure to obtain a required board aborts construction. |
 
 ## Perception backend contract
 
@@ -40,8 +32,8 @@ wait, and fallback. A cancellation request must be callable without first taking
 a mutex held by the blocked read. Cancellation and teardown are separate operations.
 
 `CvCamera::GetData()` holds `cap_mutex_` across OpenCV capture and `Teardown()`
-needs that mutex. The current API has no interrupt operation or verified capture
-timeout for this backend. Calling teardown from another thread does not unblock
+needs that mutex. `RequestStop()` prevents further captures. OpenCV provides no verified
+interrupt or timeout for a capture already in progress. Calling teardown from another thread does not unblock
 it. Do not claim an in-process shutdown bound or introduce a worker assuming it
 does. Establish and test a backend-specific bounded read/interrupt contract, or
 keep the uninterruptible backend inside the existing supervised node process.

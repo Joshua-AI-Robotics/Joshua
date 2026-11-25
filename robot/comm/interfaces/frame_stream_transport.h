@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -17,6 +18,7 @@ class FrameStreamTransport {
   struct ReceivedFrame {
     std::vector<uint8_t> bytes;
     Clock::time_point received_at;
+    std::optional<std::chrono::system_clock::time_point> received_at_unix;
   };
   struct WriteResult {
     absl::Status status;

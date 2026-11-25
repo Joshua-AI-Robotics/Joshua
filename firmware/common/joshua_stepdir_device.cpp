@@ -22,8 +22,6 @@ void Safety(void*, int reason) {
   for (uint8_t i = 0; i < g_num_channels; ++i) {
     StepDirDisable(&g_channels[i]);
     g_channels[i].configured = false;
-    g_channels[i].target_mode = JW_MODE_INVALID;
-    g_channels[i].target_value = 0;
     g_channels[i].feedback.metadata.validity = JW_SAMPLE_INVALID;
   }
   jw_resource_table_init(resources, resource_capacity);

@@ -44,14 +44,25 @@ message Actuator {
   float operational_lower_limit = 7;
   float operational_upper_limit = 8;
   MotorType motor_type = 9;
-  string board_name = 10;  // References a config.Robot.boards entry by name.
-  uint32 channel = 11;     // Channel index on that board.
+  string board_name = 10;             // References a config.Robot.boards entry by name.
+  ControlPolicy control_policy = 15;  // Host runtime policy, independent of motor/transport.
+  uint32 channel = 11;                // Channel index on that board.
   oneof action_config {
     Sts3215Config sts3215_config = 12;
     Am243EthercatConfig am243_ethercat_config = 13;
     StepperConfig stepper_config = 14;
     // Add other motor type here.
   }
+}
+
+// ROS command sources are selected by configured subscription identity, not
+// authenticated publisher identity. Stop/disabling is always available.
+message ControlPolicy {
+  string initial_source = 1;               // Unset selects "default".
+  optional uint32 command_timeout_ms = 2;  // Unset: 1000; 1..INT_MAX.
+  // Optional acquisition-age check for JointState using the receiver's ROS clock.
+  // Requires synchronized ROS stamps; unstamped numeric motion cannot satisfy it.
+  optional uint32 max_input_age_ms = 3;  // Unset: no source-age claim; 1..INT_MAX.
 }
 
 message StepperConfig {
