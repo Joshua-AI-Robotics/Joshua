@@ -190,7 +190,7 @@ through `CommFactory`; it cannot be obtained as `MessageTransport` or
 `ByteStream`. Request-only presets retain their existing path. FRAME_STREAM
 JoshuaWire boards use the shared MCU coordinator for sessions, subscriptions,
 priority scheduling and deliberate reconnect reconciliation. The mixed Teensy
-reference preset binds actuator and scalar consumers in one BOARD_NODE process.
+reference preset binds actuator and scalar consumers in one BOARD_PUBSUB process.
 
 [`JoshuaWireFrameStream`](serial/joshua_wire_frame_stream.cc) runs the existing
 bounded decoder on the same physical I/O worker. It receives between writes,

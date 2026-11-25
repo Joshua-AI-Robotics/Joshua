@@ -119,7 +119,7 @@ metadata. Neither query establishes readiness or changes config validation.
 ## Layout
 
 The mixed Teensy [scalar preset](config_preset/example/teensy_mixed_scalar.pbtxt)
-uses `FRAME_STREAM` and one `BOARD_NODE` process for actuator and scalar consumers.
+uses `FRAME_STREAM` and one `BOARD_PUBSUB` process for actuator and scalar consumers.
 `joshua_wire_scalar_config` selects `board_name`, intrinsic `function_id` and
 `period_us`; it does not declare an actuator channel. The firmware catalog must
 advertise that exact sensor/schema and period support. Subscriptions require an
@@ -418,7 +418,7 @@ remain independent of sensor types. Factories keep defensive construction checks
 for direct callers, without depending on the validation module.
 For sensors with outputs, match `IMAGE`, `RANGE_SCAN`, `POSITION`, and `AUDIO`
 to `CAMERA_PUBLISHER`, `LIDAR_PUBLISHER`, `POSITION_PUBLISHER`, and
-`AUDIO_PUBLISHER`, respectively. `BOARD_NODE` accepts board-backed `POSITION`
+`AUDIO_PUBLISHER`, respectively. `BOARD_PUBSUB` accepts board-backed `POSITION`
 and `SCALAR` and is the only node for scalar output. Each node ID has one type.
 
 Position publishers and actuator subscribers select compiled ROS message types
@@ -471,14 +471,14 @@ qualification. Runtime board/perception integration follows in P5.
 ## Shared board runtime
 
 Assign actuator and sensor entries sharing a bus the same node ID and
-`node_type: BOARD_NODE`. Board-backed steppers require `require_explicit_enable: true`
+`node_type: BOARD_PUBSUB`. Board-backed steppers require `require_explicit_enable: true`
 in this node.
 
-Migrate all `MCU_BUS` or `DEVICE_BUS` entries on the bus together, preserving
+Migrate all `MCU_BUS`, `DEVICE_BUS`, or `BOARD_NODE` entries on the bus together, preserving
 the shared ID, board references and topics. Replace the old executables with
-`ros2/board_node`. Update private service paths to use `board_node_<id>` in
-place of `mcu_bus_node_<id>` or `device_bus_node_<id>`. The protobuf value
-for `BOARD_NODE` is 9.
+`ros2/board_pubsub`. Update private service paths to use `board_pubsub_<id>` in
+place of `mcu_bus_node_<id>`, `device_bus_node_<id>`, or `board_node_<id>`. The protobuf value
+for `BOARD_PUBSUB` is 9.
 
 ## Control policy
 

@@ -1,4 +1,4 @@
-// Production board/perception + BOARD_NODE over a PTY and the actual mixed loop.
+// Production board/perception + BOARD_PUBSUB over a PTY and the actual mixed loop.
 // Only GPIO, ADC and time are native hooks; no device is opened or flashed.
 #include <fcntl.h>
 #include <spawn.h>
@@ -30,7 +30,7 @@
 #include "robot/perception/factory/perception_factory.h"
 #define JOSHUA_NODE_TEST
 #include "ros2/actuator_subscriber.cc"
-#include "ros2/board_node.cc"
+#include "ros2/board_pubsub.cc"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "utils/joshua_runtime.h"
@@ -258,7 +258,7 @@ TEST_F(MixedBindingTest, HeartbeatsNeverRefreshMovingTargetsAndFailureInvalidate
 
 TEST_F(MixedBindingTest, ReenableAfterStopHoldsUntilFreshPositionCommand) {
   const auto name = SetUniqueActuatorName(config);
-  auto runtime = std::make_shared<BoardNode>(name, 1, config);
+  auto runtime = std::make_shared<BoardPubSub>(name, 1, config);
   auto client = std::make_shared<rclcpp::Node>(name + "_client");
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(runtime);
@@ -341,7 +341,7 @@ TEST_F(MixedBindingTest, RosEstopPreemptsBlockedCommandAndWatchdogWithTwoExecuto
       5000000);
   const auto name = SetUniqueActuatorName(local);
   ASSERT_TRUE(config::ValidateConfig(local).ok()) << config::ValidateConfig(local);
-  auto runtime = std::make_shared<BoardNode>(name, 1, local);
+  auto runtime = std::make_shared<BoardPubSub>(name, 1, local);
   auto client = std::make_shared<rclcpp::Node>(name + "_client");
   auto enable = client->create_publisher<std_msgs::msg::Bool>(name + "/torque", 1);
   auto command = client->create_publisher<std_msgs::msg::Float32>(name + "/position", 1);
@@ -546,7 +546,7 @@ TEST_P(MixedRecorderQosTest, RosBusStartsDisabledPublishesMetadataAndAcceptsExpl
     for (auto& pub : *s.mutable_node()->mutable_publishers()) pub.set_topic(prefix + pub.topic());
   }
   ASSERT_TRUE(config::ValidateConfig(local).ok());
-  auto runtime = std::make_shared<BoardNode>(name, 1, local);
+  auto runtime = std::make_shared<BoardPubSub>(name, 1, local);
   EXPECT_FALSE(Enabled());
   auto client = std::make_shared<rclcpp::Node>(name + "_client");
   std::atomic<bool> observed{false};

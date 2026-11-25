@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["node_manager.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":node_name",
         ":runtime_observation",
         "//config:config_utils",
         "//config:validation",
@@ -21,11 +22,18 @@ cc_library(
 )
 
 cc_library(
+    name = "node_name",
+    hdrs = ["node_name.h"],
+    deps = ["//ros2/proto:node_cc_proto"],
+)
+
+cc_library(
     name = "runtime_observation",
     srcs = ["runtime_observation.cc"],
     hdrs = ["runtime_observation.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":node_name",
         "//config/proto:config_cc_proto",
         "//launcher:version",
         "@abseil-cpp//absl/status:statusor",

@@ -242,8 +242,8 @@ TEST_F(NodeManagerTest, ConfiguredStartupFailureAutomaticallyRollsBackEveryStart
   EXPECT_FALSE(states[1].expected_exit);
 }
 
-TEST_F(NodeManagerTest, BoardNodeResolvesItsExecutableAndNodeName) {
-  char pattern[] = "/tmp/joshua-board-node-names-XXXXXX";
+TEST_F(NodeManagerTest, BoardPubSubResolvesItsExecutableAndNodeName) {
+  char pattern[] = "/tmp/joshua-board-pubsub-names-XXXXXX";
   const auto* directory = mkdtemp(pattern);
   ASSERT_NE(directory, nullptr);
   const std::filesystem::path root(directory);
@@ -261,14 +261,15 @@ TEST_F(NodeManagerTest, BoardNodeResolvesItsExecutableAndNodeName) {
   std::filesystem::create_directories(ros2);
   // Resolve only the readiness fixture, never a production hardware executable.
   std::filesystem::create_symlink(fixture_, ros2 / "ros2_node_wrapper.sh");
-  std::filesystem::create_symlink(fixture_, ros2 / "board_node");
+  std::filesystem::create_symlink(fixture_, ros2 / "board_pubsub");
   ASSERT_EQ(setenv("RUNFILES_DIR", directory, 1), 0);
   const auto config_path = root / "config.pbtxt";
   {
     std::ofstream file(config_path);
     // Resource-free entries exercise configured node dispatch without hardware setup.
-    file
-        << R"pb(ai { data_stores { single_data_stores { node { id: 1 node_type: BOARD_NODE } } } })pb";
+    file << R"pb(ai {
+                   data_stores { single_data_stores { node { id: 1 node_type: BOARD_PUBSUB } } }
+                 })pb";
     ASSERT_TRUE(file.good());
   }
   NodeManager manager(config_path.string());
@@ -276,8 +277,8 @@ TEST_F(NodeManagerTest, BoardNodeResolvesItsExecutableAndNodeName) {
   ASSERT_TRUE(manager.LaunchAllNodes().ok());
   const auto states = manager.GetNodeStatus();
   ASSERT_EQ(states.size(), 1);
-  EXPECT_EQ(states[0].node_type, "board_node");
-  EXPECT_EQ(states[0].name, "board_node_1");
+  EXPECT_EQ(states[0].node_type, "board_pubsub");
+  EXPECT_EQ(states[0].name, "board_pubsub_1");
   for (const auto& state : states) EXPECT_TRUE(state.ready);
   EXPECT_TRUE(manager.Shutdown(FastShutdown()).ok());
 }

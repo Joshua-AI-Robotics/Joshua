@@ -242,7 +242,7 @@ ros2_cpp_library(
     deps = _ACTUATOR_SUBSCRIBER_DEPS,
 )
 
-_BOARD_NODE_DEPS = [
+_BOARD_PUBSUB_DEPS = [
     ":acquisition_schedule",
     "//utils:scope_exit",
     "//utils:status_macros",
@@ -263,21 +263,21 @@ _BOARD_NODE_DEPS = [
 ]
 
 ros2_cpp_library(
-    name = "board_node_test_source",
+    name = "board_pubsub_test_source",
     testonly = True,
-    textual_hdrs = ["board_node.cc"],
+    textual_hdrs = ["board_pubsub.cc"],
     visibility = [
         "//robot/board/joshua_wire:__pkg__",
         "//ros2:__pkg__",
     ],
-    deps = _BOARD_NODE_DEPS,
+    deps = _BOARD_PUBSUB_DEPS,
 )
 
 ros2_cpp_test(
-    name = "board_node_stop_test",
-    srcs = ["board_node_stop_test.cc"],
+    name = "board_pubsub_stop_test",
+    srcs = ["board_pubsub_stop_test.cc"],
     deps = [
-        ":board_node_test_source",
+        ":board_pubsub_test_source",
         "//config/proto:config_cc_proto",
         "//robot/board/interfaces:board_interfaces",
         "@abseil-cpp//absl/status:status",
@@ -380,18 +380,18 @@ ros2_cpp_binary(
 )
 
 ros2_cpp_binary(
-    name = "board_node",
-    srcs = ["board_node.cc"],
+    name = "board_pubsub",
+    srcs = ["board_pubsub.cc"],
     data = ["//config/config_preset:config_presets"],
     set_up_ament = True,
-    deps = _BOARD_NODE_DEPS,
+    deps = _BOARD_PUBSUB_DEPS,
 )
 
 cc_test(
-    name = "board_node_test",
-    srcs = ["board_node_test.cc"],
+    name = "board_pubsub_test",
+    srcs = ["board_pubsub_test.cc"],
     deps = [
-        ":board_node_test_source",
+        ":board_pubsub_test_source",
         "//robot/comm/factory:comm_factory",
         "//robot/comm/testing:fake_caller_sized_message_transport",
         "@googletest//:gtest_main",
@@ -431,7 +431,7 @@ ros2_cpp_test(
     name = "perception_nodes_test",
     srcs = ["perception_nodes_test.cc"],
     deps = [
-        ":board_node_test_source",
+        ":board_pubsub_test_source",
         ":camera_publisher_test_source",
         ":lidar_publisher_test_source",
         ":position_publisher_test_source",

@@ -75,7 +75,7 @@ See [camera_publisher_test.cc](camera_publisher_test.cc),
 [actuator_subscriber_test.cc](actuator_subscriber_test.cc), and the test-source
 targets in [BUILD](BUILD).
 
-Keep [board_node_stop_test.cc](board_node_stop_test.cc)'s actual stop-service tests and the
+Keep [board_pubsub_stop_test.cc](board_pubsub_stop_test.cc)'s actual stop-service tests and the
 [PTY mixed-binding test](../robot/board/joshua_wire/mixed_binding_test.cc).
 New acquisition code needs a controlled blocked read while health/stop callbacks
 remain responsive, cancellation and join within a declared deadline, stale/error
@@ -211,12 +211,12 @@ Position publishing
 `position_publisher.cc` is the standalone node for `POSITION_PUBLISHER` entries.
 It reads sensors and publishes their values using the configured message type.
 `actuator_subscriber` only receives action commands and executes them; it does not
-host sensor publishers. Use `BOARD_NODE` for commands and board-backed feedback
+host sensor publishers. Use `BOARD_PUBSUB` for commands and board-backed feedback
 on one bus, including mixed JoshuaWire scalar/actuator setups.
 
 ## Shared board runtime
 
-[`BoardNode`](board_node.cc) runs actuator commands and board-backed position
+[`BoardPubSub`](board_pubsub.cc) runs actuator commands and board-backed position
 or scalar feedback in one process. See the [configuration and migration
 guide](../config/AGENTS.md#shared-board-runtime). The [mixed Teensy
 preset](../config/config_preset/example/teensy_mixed_scalar.pbtxt) declares real hardware.

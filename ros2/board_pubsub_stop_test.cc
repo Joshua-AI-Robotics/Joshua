@@ -9,7 +9,7 @@
 
 #include "gtest/gtest.h"
 #include "rclcpp/version.h"
-#include "ros2/board_node.cc"
+#include "ros2/board_pubsub.cc"
 
 namespace {
 using namespace std::chrono_literals;
@@ -53,7 +53,7 @@ class StopBoard : public robot::board::BoardInterface {
 };
 }  // namespace
 
-class BoardNodeStopTest : public testing::Test {
+class BoardPubSubStopTest : public testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NE(std::getenv("TEST_TMPDIR"), nullptr);
@@ -62,7 +62,7 @@ class BoardNodeStopTest : public testing::Test {
     ASSERT_EQ(setenv("ROS_LOCALHOST_ONLY", "1", 1), 0);
     rclcpp::init(0, nullptr);
     // Empty config avoids constructing any production board or serial owner.
-    runtime_ = std::make_shared<BoardNode>("stop_test", 1, config::Config{});
+    runtime_ = std::make_shared<BoardPubSub>("stop_test", 1, config::Config{});
     client_node_ = std::make_shared<rclcpp::Node>("stop_test_client");
     client_ = client_node_->create_client<std_srvs::srv::Trigger>("/stop_test/estop");
     executor_ =
@@ -93,14 +93,14 @@ class BoardNodeStopTest : public testing::Test {
   }
 
   std::vector<std::shared_ptr<StopBoard>> boards_;
-  std::shared_ptr<BoardNode> runtime_;
+  std::shared_ptr<BoardPubSub> runtime_;
   rclcpp::Node::SharedPtr client_node_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_;
   std::unique_ptr<rclcpp::executors::MultiThreadedExecutor> executor_;
   std::thread spin_;
 };
 
-TEST_F(BoardNodeStopTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure) {
+TEST_F(BoardPubSubStopTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure) {
   auto first = AddBoard(absl::DeadlineExceededError("first board acknowledgment lost"));
   auto second = AddBoard(absl::UnavailableError("second board disconnected"));
   auto healthy = AddBoard(absl::OkStatus());
@@ -123,7 +123,7 @@ TEST_F(BoardNodeStopTest, DispatchesAllStopsBeforeWaitingAndCollectsEveryFailure
   EXPECT_NE(response->message.find("second board disconnected"), std::string::npos);
 }
 
-TEST_F(BoardNodeStopTest, ReportsSuccessWhenEveryBoardAcknowledges) {
+TEST_F(BoardPubSubStopTest, ReportsSuccessWhenEveryBoardAcknowledges) {
   auto first = AddBoard(absl::OkStatus());
   auto second = AddBoard(absl::OkStatus());
   first->Release();

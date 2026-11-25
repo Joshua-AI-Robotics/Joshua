@@ -39,7 +39,7 @@ cc_binary(
         "//config/config_preset:config_presets",
         "//ros2:actuator_subscriber",
         "//ros2:audio_publisher",
-        "//ros2:board_node",
+        "//ros2:board_pubsub",
         "//ros2:camera_publisher",
         "//ros2:data_subscriber",
         "//ros2:inference",

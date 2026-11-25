@@ -22,7 +22,7 @@ when the driver/coordinator does not already acquire/cache samples.
 | ALSA audio | AudioPublisher calls `Init()` | Initial failure aborts construction. Capture code reopens after device failure. The node refreshes its polling schedule. |
 | LDS01 lidar | LidarPublisher acquisition worker calls `Init()` once | A failed factory or initialization result remains visible on the source status topic until restart. |
 | Board position | BoardFactory initializes the shared board. The acquisition worker initializes the sensor. | Failed source resolution remains visible on the status topic. The board owner controls board lifetime and recovery. |
-| Board scalar stream | The factory subscribes the stream. BoardNode initializes the sensor and reads the coordinator cache. | Source errors are reported through status. Closing a scalar lease preserves other consumers. Failure to obtain a required board aborts construction. |
+| Board scalar stream | The factory subscribes the stream. BoardPubSub initializes the sensor and reads the coordinator cache. | Source errors are reported through status. Closing a scalar lease preserves other consumers. Failure to obtain a required board aborts construction. |
 
 ## Perception backend contract
 

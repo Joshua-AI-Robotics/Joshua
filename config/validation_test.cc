@@ -60,7 +60,7 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   b->mutable_joshua_wire_host_policy()->set_telemetry_bytes_per_second(10000);
   auto* s = c.mutable_robot()->mutable_perceptions()->mutable_single_perceptions(0);
   s->set_sensor_type(robot::perception::SCALAR);
-  s->mutable_node()->set_node_type(ros2::node::BOARD_NODE);
+  s->mutable_node()->set_node_type(ros2::node::BOARD_PUBSUB);
   auto* scalar = s->mutable_joshua_wire_scalar_config();
   scalar->set_board_name("bus");
   scalar->set_function_id(128);
@@ -71,7 +71,7 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   p->set_publish_rate_hz(50);
   auto* a = c.mutable_robot()->mutable_actions()->add_single_actions();
   a->mutable_node()->set_id(1);
-  a->mutable_node()->set_node_type(ros2::node::BOARD_NODE);
+  a->mutable_node()->set_node_type(ros2::node::BOARD_PUBSUB);
   a->set_action_type(robot::action::ACTUATOR);
   a->mutable_actuator()->set_board_name("bus");
   a->mutable_actuator()->set_channel(1);
@@ -88,8 +88,8 @@ TEST(ValidationTest, MixedScalarAndActuatorMustShareOneBusProcess) {
   EXPECT_FALSE(ValidateConfig(c).ok());
 }
 
-TEST(ValidationTest, BoardNodeUsesNineAndRejectsRemovedBusNames) {
-  for (const auto* name : {"MCU_BUS", "DEVICE_BUS"}) {
+TEST(ValidationTest, BoardPubSubUsesNineAndRejectsRemovedBusNames) {
+  for (const auto* name : {"MCU_BUS", "DEVICE_BUS", "BOARD_NODE"}) {
     ros2::node::NodeType type;
     EXPECT_FALSE(ros2::node::NodeType_Parse(name, &type)) << name;
   }
@@ -99,7 +99,7 @@ TEST(ValidationTest, BoardNodeUsesNineAndRejectsRemovedBusNames) {
                    ->mutable_single_perceptions(0)
                    ->mutable_node();
   ASSERT_TRUE(google::protobuf::TextFormat::ParseFromString("id: 1 node_type: 9", node));
-  EXPECT_EQ(node->node_type(), ros2::node::BOARD_NODE);
+  EXPECT_EQ(node->node_type(), ros2::node::BOARD_PUBSUB);
   EXPECT_TRUE(ValidateConfig(board_config).ok());
   for (const auto value : {10, 11}) {
     auto config = MakeConfig();
@@ -246,7 +246,7 @@ TEST(ValidationTest, RejectsOutputsThatTheSelectedComponentNodeCannotPublish) {
   output->set_ros2_data_type(ros2::data_type::FLOAT32);
   output->set_publish_rate_hz(30);
   EXPECT_TRUE(ValidateConfig(config).ok());
-  sensor->mutable_node()->set_node_type(ros2::node::BOARD_NODE);
+  sensor->mutable_node()->set_node_type(ros2::node::BOARD_PUBSUB);
   EXPECT_TRUE(ValidateConfig(config).ok());
   for (const auto type : {ros2::node::CAMERA_PUBLISHER,
                           ros2::node::LIDAR_PUBLISHER,

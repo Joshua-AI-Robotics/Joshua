@@ -55,7 +55,7 @@ restarted, and a trajectory process may complete successfully without failing
 the remaining graph.
 
 For [shared board configurations](../../config/AGENTS.md#shared-board-runtime),
-NodeManager launches one `ros2/board_node` process per configured node ID.
+NodeManager launches one `ros2/board_pubsub` process per configured node ID.
 
 ## Process ownership
 

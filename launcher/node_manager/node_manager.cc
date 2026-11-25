@@ -11,7 +11,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +22,7 @@
 #include "config/config_utils.h"
 #include "config/validation.h"
 #include "glog/logging.h"
+#include "launcher/node_manager/node_name.h"
 #include "utils/joshua_runtime.h"
 #include "utils/scope_exit.h"
 #include "utils/status_macros.h"
@@ -39,16 +39,6 @@ NodeManager* active_manager = nullptr;
 // Common environment variables.
 constexpr auto kROS2NodeWrapper = "ros2_node_wrapper.sh";
 constexpr auto kROS2 = "ros2";
-
-std::string NodeTypeToString(const ros2::node::NodeType& type) {
-  if (type == ros2::node::NODE_INVALID) {
-    return "";
-  }
-  std::string name = ros2::node::NodeType_Name(type);
-  std::transform(
-      name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
-  return name;
-}
 
 // Resolve current executable absolute path via /proc/self/exe
 std::string GetSelfExecutablePath() {
@@ -518,8 +508,8 @@ absl::Status NodeManager::IdentifyNodeTypes() {
 
 absl::StatusOr<NodeManager::LaunchSpec> NodeManager::BuildNodeLaunchSpec(
     ros2::node::NodeType type, uint32_t id, const std::string& name) const {
-  const std::string executable = NodeTypeToString(type);
-  if (executable.empty() || !IsExecutableAvailable(executable))
+  const std::string executable = NodeExecutableName(type);
+  if (type == ros2::node::NODE_INVALID || executable.empty() || !IsExecutableAvailable(executable))
     return absl::NotFoundError("No executable available for node " + name);
   LaunchSpec spec;
   spec.name = name;
@@ -564,9 +554,7 @@ absl::Status NodeManager::LaunchAllNodes() {
   if (graph_started_) return absl::FailedPreconditionError("Node graph already started");
   std::vector<LaunchSpec> specs;
   for (const auto& [id, type] : identified_nodes_) {
-    // BOARD_NODE already includes the node suffix; preserve every legacy name.
-    const auto suffix = type == ros2::node::BOARD_NODE ? "_" : "_node_";
-    const auto name = NodeTypeToString(type) + suffix + std::to_string(id);
+    const auto name = RuntimeNodeName(type, id);
     ABSL_ASSIGN_OR_RETURN(auto spec, BuildNodeLaunchSpec(type, id, name));
     ABSL_RETURN_IF_ERROR(GetTopicsForNode(id, spec.publish_topics, spec.subscribe_topics));
     specs.push_back(std::move(spec));

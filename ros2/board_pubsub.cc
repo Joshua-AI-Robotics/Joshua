@@ -28,17 +28,17 @@
 #include "utils/scope_exit.h"
 #include "utils/status_macros.h"
 
-class BoardNode : public rclcpp::Node {
+class BoardPubSub : public rclcpp::Node {
  public:
   using Factory =
       std::function<absl::StatusOr<std::unique_ptr<robot::perception::PerceptionInterface>>(
           const robot::perception::SinglePerception&)>;
   using WorkerStart = std::function<std::thread(std::string, std::function<void()>)>;
-  BoardNode(const std::string& name,
-            int id,
-            const config::Config& config,
-            Factory factory = {},
-            WorkerStart start_worker = joshua::StartWorker)
+  BoardPubSub(const std::string& name,
+              int id,
+              const config::Config& config,
+              Factory factory = {},
+              WorkerStart start_worker = joshua::StartWorker)
       : Node(name) {
     ros2_utils::SetLogNodeName(get_logger().get_name());
     bool complete = false;
@@ -142,13 +142,13 @@ class BoardNode : public rclcpp::Node {
     }
     complete = true;
   }
-  ~BoardNode() override {
+  ~BoardPubSub() override {
     Shutdown();
   }
 
  private:
-  friend class BoardNodeStopTest;
-  friend class BoardNodeTest;
+  friend class BoardPubSubStopTest;
+  friend class BoardPubSubTest;
   using Clock = robot::perception::ObservationState::Clock;
   struct Source {
     Source(const robot::perception::SinglePerception& sensor, std::string unit, std::string frame)
@@ -223,6 +223,6 @@ class BoardNode : public rclcpp::Node {
 
 #ifndef JOSHUA_NODE_TEST
 JOSHUA_MAIN(argc, argv) {
-  return ros2_utils::RunNode<BoardNode>(argc, argv, "board_node", 2);
+  return ros2_utils::RunNode<BoardPubSub>(argc, argv, "board_pubsub", 2);
 }
 #endif

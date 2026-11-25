@@ -15,7 +15,7 @@ enum NodeType {
   DATA_SUBSCRIBER = 6;
   TRAJECTORY_PUBLISHER = 7;
   AUDIO_PUBLISHER = 8;
-  BOARD_NODE = 9;  // Owns shared board connections, actuator commands, and observations.
+  BOARD_PUBSUB = 9;  // Owns shared board connections, actuator commands, and observations.
 }
 
 enum QosReliabilityPolicy {
